@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#05050c">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg">
+  <title>Sphere + Tangential Circles</title>
+  <style>
+    * { margin: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #05050c; }
+    canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+    canvas:active { cursor: grabbing; }
+    #info {
+      position: fixed; left: 16px; top: 16px; color: #c8d0dc;
+      font-family: system-ui, sans-serif; font-size: 12px; line-height: 1.5;
+      pointer-events: none; text-shadow: 0 1px 6px #000;
+    }
+    #info span { color: #7fd4ff; }
+    #panel {
+      position: fixed; right: 14px; top: 14px; bottom: 14px;
+      width: 276px; overflow: auto;
+      font-family: system-ui, sans-serif; color: #d0d6e0;
+      background: rgba(8, 10, 18, 0.82);
+      border: 1px solid rgba(255,255,255,0.08);
+      padding: 12px 14px 18px; border-radius: 10px;
+      backdrop-filter: blur(8px);
+    }
+    #panel h1 {
+      font-size: 13px; font-weight: 650; letter-spacing: 0.04em;
+      color: #fff; margin: 0 0 8px;
+    }
+    #panel h2 {
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em;
+      color: #7fd4ff; margin: 12px 0 6px; border-top: 1px solid rgba(255,255,255,0.08);
+      padding-top: 8px;
+    }
+    #panel h2:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
+    #panel label {
+      display: grid;
+      grid-template-columns: 72px 1fr 42px;
+      align-items: center; gap: 8px;
+      font-size: 12px; margin: 5px 0;
+    }
+    #panel input[type="range"] { width: 100%; accent-color: #44ffaa; cursor: pointer; }
+    #panel .val { color: #44ffaa; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; font-size: 11px; }
+    #panel input[type="checkbox"] {
+      width: 16px; height: 16px; accent-color: #44ffaa; cursor: pointer; justify-self: start;
+    }
+    .presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
+    .presets button {
+      background: rgba(68,255,170,0.12); color: #c8ffe8; border: 1px solid rgba(68,255,170,0.35);
+      border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer;
+    }
+    .presets button:hover { background: rgba(68,255,170,0.22); }
+    #hint { color: #889; font-size: 10px; margin-top: 10px; line-height: 1.4; }
+  </style>
+</head>
+<body>
+  <div id="info">
+    drag orbit · scroll zoom · space pause · double-click reset cam<br>
+    cycle <span id="rVal">0.00</span> · N <span id="nLive">16</span>
+  </div>
+  <div id="panel">
+    <h1>Circles</h1>
+    <div class="presets">
+      <button data-preset="lattice">Lattice</button>
+      <button data-preset="nebula">Nebula</button>
+      <button data-preset="launch">Launch</button>
+      <button data-preset="helix">Helix</button>
+      <button data-preset="wire">Wire</button>
+      <button data-preset="dense">Dense</button>
+    </div>
+
+    <h2>Motion</h2>
+    <label>Circles <input id="count" type="range" min="1" max="512" step="1" value="16"><span class="val" id="countVal">16</span></label>
+    <label>Phase <input id="phase" type="range" min="0" max="1" step="0.001" value="0.35"><span class="val" id="phaseVal">0.35</span></label>
+    <label>Rate <input id="rate" type="range" min="0.05" max="4" step="0.01" value="1"><span class="val" id="rateVal">1.00×</span></label>
+    <label>Twist <input id="twist" type="range" min="0" max="4" step="0.01" value="0"><span class="val" id="twistVal">0.00</span></label>
+    <label>Drift <input id="drift" type="range" min="0" max="2" step="0.01" value="0"><span class="val" id="driftVal">0.00</span></label>
+    <label>Auto flow <input id="autoFlow" type="checkbox"><span class="val" id="autoFlowVal">off</span></label>
+    <label>Flow spd <input id="flowSpd" type="range" min="0.15" max="2" step="0.01" value="0.55"><span class="val" id="flowSpdVal">0.55</span></label>
+    <label>Pause <input id="pause" type="checkbox"><span class="val" id="pauseVal">off</span></label>
+
+    <h2>Fly</h2>
+    <label>Fly <input id="flyMode" type="checkbox"><span class="val" id="flyModeVal">off</span></label>
+    <label>Fly spd <input id="flyAmt" type="range" min="0" max="3" step="0.01" value="0.55"><span class="val" id="flyAmtVal">0.55</span></label>
+    <label>Inward <input id="flyIn" type="checkbox"><span class="val" id="flyInVal">off</span></label>
+    <label>Trails <input id="showTrails" type="checkbox" checked><span class="val" id="trailsVal">on</span></label>
+
+    <h2>Look</h2>
+    <label>Sphere <input id="showSphere" type="checkbox"><span class="val" id="sphereVal">off</span></label>
+    <label>Equator <input id="showEq" type="checkbox" checked><span class="val" id="eqVal">on</span></label>
+    <label>Dots <input id="showDots" type="checkbox" checked><span class="val" id="dotsVal">on</span></label>
+    <label>Normals <input id="showNrm" type="checkbox"><span class="val" id="nrmVal">off</span></label>
+    <label>Glow <input id="glow" type="checkbox" checked><span class="val" id="glowVal">on</span></label>
+    <label>Fill <input id="fillOn" type="checkbox"><span class="val" id="fillVal">off</span></label>
+    <label>Stars <input id="starsOn" type="checkbox" checked><span class="val" id="starsVal">on</span></label>
+    <label>Orbit <input id="autoSpin" type="checkbox" checked><span class="val" id="spinVal">on</span></label>
+    <label>Width <input id="width" type="range" min="0.4" max="5" step="0.05" value="1.6"><span class="val" id="widthVal">1.60</span></label>
+    <label>Hue <input id="hue" type="range" min="0" max="360" step="1" value="0"><span class="val" id="hueVal">0</span></label>
+    <label>Hue spd <input id="hueSpd" type="range" min="0" max="80" step="0.5" value="8"><span class="val" id="hueSpdVal">8.0</span></label>
+    <label>Pulse <input id="pulse" type="range" min="0" max="1" step="0.01" value="0.25"><span class="val" id="pulseVal">0.25</span></label>
+    <label>Ghost <input id="ghost" type="range" min="0" max="0.92" step="0.01" value="0.18"><span class="val" id="ghostVal">0.18</span></label>
+    <label>Fill amt <input id="fillAmt" type="range" min="0" max="0.35" step="0.005" value="0.06"><span class="val" id="fillAmtVal">0.06</span></label>
+    <p id="hint">Auto flow morphs settings slowly into new looks. Dense = high N. Glow auto-throttles at big circle counts.</p>
+  </div>
+  <canvas id="c"></canvas>
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const R = 1;
+    const CYCLE = 6;
+    const MAX_N = 512;
+    const TRAIL_LEN = 70;
+
+    const $ = (id) => document.getElementById(id);
+    const bindRange = (id, valId, parse, fmt, apply) => {
+      const el = $(id), out = $(valId);
+      const go = () => { const v = parse(el.value); out.textContent = fmt(v); apply(v); };
+      el.addEventListener('input', go);
+      go();
+      return el;
+    };
+    const bindCheck = (id, valId, apply) => {
+      const el = $(id), out = $(valId);
+      const go = () => { apply(el.checked); out.textContent = el.checked ? 'on' : 'off'; };
+      el.addEventListener('change', go);
+      go();
+      return el;
+    };
+
+    let N = 16, phase = 0.35, rate = 1, twist = 0, drift = 0, paused = false;
+    let flyMode = false, flyAmt = 0.55, flyIn = false, showTrails = true;
+    let showSphere = false, showEq = true, showDots = true, showNrm = false;
+    let glow = true, fillOn = false, starsOn = true, autoSpin = true;
+    let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
+    let autoFlow = false, flowSpd = 0.55;
+    let flowMuteUI = false;
+
+    const flight = Array.from({ length: MAX_N }, () => [0, 0, 0]);
+    const trails = Array.from({ length: MAX_N }, () => []);
+    function resetFlight() {
+      for (let i = 0; i < MAX_N; i++) {
+        flight[i][0] = flight[i][1] = flight[i][2] = 0;
+        trails[i].length = 0;
+      }
+    }
+
+    function setSlider(id, value, silent) {
+      const el = $(id);
+      el.value = value;
+      if (silent) {
+        flowMuteUI = true;
+        el.dispatchEvent(new Event('input'));
+        flowMuteUI = false;
+      } else {
+        el.dispatchEvent(new Event('input'));
+        el.dispatchEvent(new Event('change'));
+      }
+    }
+    function setCheck(id, on, silent) {
+      const el = $(id);
+      el.checked = on;
+      if (silent) {
+        flowMuteUI = true;
+        el.dispatchEvent(new Event('change'));
+        flowMuteUI = false;
+      } else {
+        el.dispatchEvent(new Event('change'));
+      }
+    }
+
+    bindRange('count', 'countVal', parseInt, v => v, v => N = v);
+    bindRange('phase', 'phaseVal', parseFloat, v => v.toFixed(2), v => phase = v);
+    bindRange('rate', 'rateVal', parseFloat, v => v.toFixed(2) + '×', v => rate = v);
+    bindRange('twist', 'twistVal', parseFloat, v => v.toFixed(2), v => twist = v);
+    bindRange('drift', 'driftVal', parseFloat, v => v.toFixed(2), v => drift = v);
+    bindRange('flowSpd', 'flowSpdVal', parseFloat, v => v.toFixed(2), v => flowSpd = v);
+    bindCheck('pause', 'pauseVal', v => paused = v);
+    bindCheck('autoFlow', 'autoFlowVal', v => {
+      autoFlow = v;
+      if (v && !flowMuteUI) pickFlowTarget(true);
+    });
+    bindCheck('flyMode', 'flyModeVal', v => { flyMode = v; if (!flowMuteUI) resetFlight(); });
+    bindRange('flyAmt', 'flyAmtVal', parseFloat, v => v.toFixed(2), v => flyAmt = v);
+    bindCheck('flyIn', 'flyInVal', v => flyIn = v);
+    bindCheck('showTrails', 'trailsVal', v => showTrails = v);
+    bindCheck('showSphere', 'sphereVal', v => showSphere = v);
+    bindCheck('showEq', 'eqVal', v => showEq = v);
+    bindCheck('showDots', 'dotsVal', v => showDots = v);
+    bindCheck('showNrm', 'nrmVal', v => showNrm = v);
+    bindCheck('glow', 'glowVal', v => glow = v);
+    bindCheck('fillOn', 'fillVal', v => fillOn = v);
+    bindCheck('starsOn', 'starsVal', v => starsOn = v);
+    bindCheck('autoSpin', 'spinVal', v => autoSpin = v);
+    bindRange('width', 'widthVal', parseFloat, v => v.toFixed(2), v => lineW = v);
+    bindRange('hue', 'hueVal', parseFloat, v => String(Math.round(v)), v => hue0 = v);
+    bindRange('hueSpd', 'hueSpdVal', parseFloat, v => v.toFixed(1), v => hueSpd = v);
+    bindRange('pulse', 'pulseVal', parseFloat, v => v.toFixed(2), v => pulse = v);
+    bindRange('ghost', 'ghostVal', parseFloat, v => v.toFixed(2), v => ghost = v);
+    bindRange('fillAmt', 'fillAmtVal', parseFloat, v => v.toFixed(2), v => fillAmt = v);
+
+    const presets = {
+      lattice: () => {
+        setSlider('count', 24); setSlider('phase', 0); setSlider('rate', 1);
+        setSlider('twist', 0); setSlider('drift', 0); setCheck('flyMode', false);
+        setCheck('showSphere', false); setCheck('showEq', true); setCheck('glow', true);
+        setCheck('fillOn', false); setCheck('starsOn', true); setCheck('autoSpin', true);
+        setCheck('showNrm', false); setSlider('width', 1.5); setSlider('hueSpd', 6);
+        setSlider('pulse', 0.15); setSlider('ghost', 0.12); setSlider('hue', 0);
+        setCheck('autoFlow', false);
+      },
+      nebula: () => {
+        setSlider('count', 48); setSlider('phase', 0.55); setSlider('rate', 0.7);
+        setSlider('twist', 0.85); setSlider('drift', 0.15); setCheck('flyMode', false);
+        setCheck('showSphere', false); setCheck('showEq', false); setCheck('glow', true);
+        setCheck('fillOn', true); setCheck('starsOn', true); setCheck('autoSpin', true);
+        setCheck('showDots', false); setCheck('showNrm', false);
+        setSlider('width', 2.2); setSlider('hueSpd', 22); setSlider('pulse', 0.45);
+        setSlider('ghost', 0.55); setSlider('fillAmt', 0.08); setSlider('hue', 200);
+        setCheck('autoFlow', false);
+      },
+      launch: () => {
+        setSlider('count', 32); setSlider('phase', 0.4); setSlider('rate', 1.1);
+        setSlider('twist', 0.2); setSlider('drift', 0); setCheck('flyMode', true);
+        setSlider('flyAmt', 0.7); setCheck('flyIn', false); setCheck('showTrails', true);
+        setCheck('showSphere', true); setCheck('showEq', true); setCheck('glow', true);
+        setCheck('fillOn', false); setCheck('showDots', true); setCheck('showNrm', true);
+        setSlider('width', 1.8); setSlider('hueSpd', 10); setSlider('pulse', 0.3);
+        setSlider('ghost', 0.22); setCheck('autoFlow', false);
+      },
+      helix: () => {
+        setSlider('count', 36); setSlider('phase', 0.7); setSlider('rate', 0.85);
+        setSlider('twist', 2.4); setSlider('drift', 0.35); setCheck('flyMode', false);
+        setCheck('showSphere', false); setCheck('showEq', true); setCheck('glow', true);
+        setCheck('fillOn', false); setCheck('showDots', true); setCheck('showNrm', false);
+        setSlider('width', 1.7); setSlider('hueSpd', 14); setSlider('pulse', 0.2);
+        setSlider('ghost', 0.28); setSlider('hue', 40); setCheck('autoFlow', false);
+      },
+      wire: () => {
+        setSlider('count', 16); setSlider('phase', 0); setSlider('rate', 1);
+        setSlider('twist', 0); setSlider('drift', 0); setCheck('flyMode', false);
+        setCheck('showSphere', true); setCheck('showEq', true); setCheck('glow', false);
+        setCheck('fillOn', false); setCheck('starsOn', false); setCheck('autoSpin', false);
+        setCheck('showDots', true); setCheck('showNrm', true);
+        setSlider('width', 1.2); setSlider('hueSpd', 0); setSlider('pulse', 0);
+        setSlider('ghost', 0); setSlider('hue', 0); setCheck('autoFlow', false);
+      },
+      dense: () => {
+        setSlider('count', 256); setSlider('phase', 0.42); setSlider('rate', 0.55);
+        setSlider('twist', 0.4); setSlider('drift', 0.08); setCheck('flyMode', false);
+        setCheck('showSphere', false); setCheck('showEq', false); setCheck('glow', true);
+        setCheck('fillOn', false); setCheck('showDots', false); setCheck('showNrm', false);
+        setSlider('width', 0.9); setSlider('hueSpd', 12); setSlider('pulse', 0.12);
+        setSlider('ghost', 0.35); setSlider('hue', 160); setCheck('autoFlow', false);
+      }
+    };
+    document.querySelectorAll('[data-preset]').forEach(btn => {
+      btn.addEventListener('click', () => presets[btn.dataset.preset]());
+    });
+
+    addEventListener('keydown', e => {
+      if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
+        e.preventDefault();
+        $('pause').checked = !$('pause').checked;
+        $('pause').dispatchEvent(new Event('change'));
+      }
+    });
+
+    // --- Auto flow: slow morph toward semi-random looks ---
+    const flowKeys = [
+      { id: 'count', key: 'N', min: 8, max: 512, int: true, weight: 1 },
+      { id: 'phase', key: 'phase', min: 0, max: 1 },
+      { id: 'rate', key: 'rate', min: 0.25, max: 2.2 },
+      { id: 'twist', key: 'twist', min: 0, max: 3.2 },
+      { id: 'drift', key: 'drift', min: 0, max: 0.9 },
+      { id: 'width', key: 'lineW', min: 0.6, max: 3.2 },
+      { id: 'hue', key: 'hue0', min: 0, max: 360 },
+      { id: 'hueSpd', key: 'hueSpd', min: 0, max: 40 },
+      { id: 'pulse', key: 'pulse', min: 0, max: 0.7 },
+      { id: 'ghost', key: 'ghost', min: 0, max: 0.75 },
+      { id: 'fillAmt', key: 'fillAmt', min: 0.02, max: 0.16 },
+      { id: 'flyAmt', key: 'flyAmt', min: 0.15, max: 1.4 }
+    ];
+    const getters = {
+      N: () => N, phase: () => phase, rate: () => rate, twist: () => twist, drift: () => drift,
+      lineW: () => lineW, hue0: () => hue0, hueSpd: () => hueSpd, pulse: () => pulse,
+      ghost: () => ghost, fillAmt: () => fillAmt, flyAmt: () => flyAmt
+    };
+    const setters = {
+      N: v => { N = v; setSlider('count', Math.round(v), true); },
+      phase: v => { phase = v; setSlider('phase', v, true); },
+      rate: v => { rate = v; setSlider('rate', v, true); },
+      twist: v => { twist = v; setSlider('twist', v, true); },
+      drift: v => { drift = v; setSlider('drift', v, true); },
+      lineW: v => { lineW = v; setSlider('width', v, true); },
+      hue0: v => { hue0 = v; setSlider('hue', v, true); },
+      hueSpd: v => { hueSpd = v; setSlider('hueSpd', v, true); },
+      pulse: v => { pulse = v; setSlider('pulse', v, true); },
+      ghost: v => { ghost = v; setSlider('ghost', v, true); },
+      fillAmt: v => { fillAmt = v; setSlider('fillAmt', v, true); },
+      flyAmt: v => { flyAmt = v; setSlider('flyAmt', v, true); }
+    };
+    let flowTarget = {};
+    let flowHold = 0;
+
+    function rnd(a, b) { return a + Math.random() * (b - a); }
+    function pickCount() {
+      const roll = Math.random();
+      if (roll < 0.45) return Math.round(rnd(12, 64));
+      if (roll < 0.75) return Math.round(rnd(64, 180));
+      if (roll < 0.92) return Math.round(rnd(180, 320));
+      return Math.round(rnd(320, 512));
+    }
+    function pickFlowTarget(force) {
+      for (const k of flowKeys) {
+        if (k.key === 'N') flowTarget.N = pickCount();
+        else if (k.key === 'hue0') flowTarget.hue0 = (getters.hue0() + rnd(-80, 120) + 360) % 360;
+        else flowTarget[k.key] = rnd(k.min, k.max);
+      }
+      // mood bits — occasional flips, not every target
+      if (force || Math.random() < 0.35) {
+        const mood = Math.random();
+        if (mood < 0.55) {
+          setCheck('flyMode', false, true);
+          setCheck('fillOn', Math.random() < 0.35, true);
+          setCheck('showDots', Math.random() < 0.55, true);
+          setCheck('showEq', Math.random() < 0.45, true);
+          setCheck('glow', Math.random() < 0.85, true);
+          setCheck('showNrm', false, true);
+        } else if (mood < 0.8) {
+          setCheck('flyMode', true, true);
+          setCheck('showTrails', true, true);
+          setCheck('showNrm', Math.random() < 0.4, true);
+          setCheck('fillOn', false, true);
+        } else {
+          setCheck('flyMode', false, true);
+          setCheck('fillOn', true, true);
+          setCheck('showDots', false, true);
+          setCheck('showEq', false, true);
+          setCheck('glow', true, true);
+        }
+      }
+      flowHold = rnd(10, 22) / Math.max(0.2, flowSpd);
+    }
+
+    function tickFlow(dt) {
+      if (!autoFlow || paused) return;
+      flowHold -= dt;
+      if (flowHold <= 0) pickFlowTarget(false);
+      const speed = 0.08 * flowSpd;
+      for (const k of flowKeys) {
+        const cur = getters[k.key]();
+        let tgt = flowTarget[k.key];
+        if (tgt == null) continue;
+        let next;
+        if (k.key === 'hue0') {
+          let d = ((tgt - cur + 540) % 360) - 180;
+          next = cur + d * Math.min(1, speed * 1.2);
+          next = ((next % 360) + 360) % 360;
+        } else {
+          next = cur + (tgt - cur) * Math.min(1, speed);
+          if (k.int) next = Math.round(next);
+        }
+        if (Math.abs(next - cur) > 1e-4) setters[k.key](next);
+      }
+    }
+
+    let W, H, cx, cy, scale;
+    let rotY = 0.7, rotX = 0.32, zoom = 300;
+    let drag = false, lx = 0, ly = 0;
+
+    function resize() {
+      W = canvas.width = innerWidth;
+      H = canvas.height = innerHeight;
+      cx = W / 2; cy = H / 2;
+      scale = Math.min(W, H) / 4;
+    }
+    resize();
+    addEventListener('resize', resize);
+
+    canvas.addEventListener('mousedown', e => { drag = true; lx = e.clientX; ly = e.clientY; });
+    addEventListener('mouseup', () => { drag = false; });
+    addEventListener('mousemove', e => {
+      if (!drag) return;
+      rotY += (e.clientX - lx) * 0.008;
+      rotX = Math.max(-1.4, Math.min(1.4, rotX + (e.clientY - ly) * 0.008));
+      lx = e.clientX; ly = e.clientY;
+    });
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      zoom = Math.max(40, Math.min(2000, zoom - e.deltaY * 0.45));
+    }, { passive: false });
+    canvas.addEventListener('dblclick', () => { rotY = 0.7; rotX = 0.32; zoom = 300; });
+
+    const stars = Array.from({ length: 180 }, () => [
+      (Math.random() - 0.5) * 28,
+      (Math.random() - 0.5) * 28,
+      (Math.random() - 0.5) * 28
+    ]);
+
+    function rot(p) {
+      let [x, y, z] = p;
+      const cy = Math.cos(rotY), sy = Math.sin(rotY);
+      const cxr = Math.cos(rotX), sx = Math.sin(rotX);
+      let x1 = x * cy - z * sy;
+      let z1 = x * sy + z * cy;
+      let y1 = y * cxr - z1 * sx;
+      let z2 = y * sx + z1 * cxr;
+      return [x1, y1, z2];
+    }
+    function proj(p) {
+      const [x, y, z] = rot(p);
+      const f = zoom / (zoom + z * scale * 0.15 + scale);
+      return { x: cx + x * scale * f, y: cy - y * scale * f, z, f };
+    }
+    function add(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+
+    function segCount() {
+      if (N > 256) return 28;
+      if (N > 128) return 40;
+      if (N > 64) return 56;
+      return 80;
+    }
+
+    function circlePts(u, rho, offset, seg) {
+      const pts = [];
+      let e2 = Math.abs(u[2]) > 0.9 ? [1, 0, 0] : [0, 0, 1];
+      let e1 = [u[1]*e2[2]-u[2]*e2[1], u[2]*e2[0]-u[0]*e2[2], u[0]*e2[1]-u[1]*e2[0]];
+      let n1 = Math.hypot(e1[0], e1[1], e1[2]) || 1;
+      e1 = [e1[0]/n1, e1[1]/n1, e1[2]/n1];
+      e2 = [e1[1]*u[2]-e1[2]*u[1], e1[2]*u[0]-e1[0]*u[2], e1[0]*u[1]-e1[1]*u[0]];
+      const cx0 = R * Math.cos(rho), rr = R * Math.sin(rho);
+      for (let i = 0; i <= seg; i++) {
+        const a = (i / seg) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+        pts.push(proj([
+          cx0*u[0] + rr*(ca*e1[0]+sa*e2[0]) + offset[0],
+          cx0*u[1] + rr*(ca*e1[1]+sa*e2[1]) + offset[1],
+          cx0*u[2] + rr*(ca*e1[2]+sa*e2[2]) + offset[2]
+        ]));
+      }
+      return pts;
+    }
+
+    function strokePts(pts, color, width) {
+      if (pts.length < 2) return;
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.stroke();
+    }
+    function fillPts(pts, color) {
+      if (pts.length < 3) return;
+      ctx.beginPath();
+      ctx.fillStyle = color;
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.closePath();
+      ctx.fill();
+    }
+    function drawDot(p, color, r) {
+      const q = proj(p);
+      ctx.beginPath();
+      ctx.fillStyle = color;
+      ctx.arc(q.x, q.y, Math.max(1.0, r * q.f), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    function hsla(h, s, l, a) {
+      return `hsla(${((h % 360) + 360) % 360} ${s}% ${l}% / ${a})`;
+    }
+
+    function sphereWire() {
+      const seg = 48;
+      for (let lat = -3; lat <= 3; lat++) {
+        const phi = (lat / 4) * Math.PI * 0.5;
+        const y0 = Math.sin(phi) * R, r0 = Math.cos(phi) * R;
+        const pts = [];
+        for (let i = 0; i <= seg; i++) {
+          const a = (i / seg) * Math.PI * 2;
+          pts.push(proj([Math.cos(a)*r0, y0, Math.sin(a)*r0]));
+        }
+        strokePts(pts, 'rgba(90,140,190,0.22)', 1);
+      }
+      for (let lon = 0; lon < 8; lon++) {
+        const a0 = (lon / 8) * Math.PI * 2;
+        const pts = [];
+        for (let i = 0; i <= seg; i++) {
+          const t = (i / seg) * Math.PI;
+          pts.push(proj([Math.sin(t)*Math.cos(a0)*R, Math.cos(t)*R, Math.sin(t)*Math.sin(a0)*R]));
+        }
+        strokePts(pts, 'rgba(90,140,190,0.22)', 1);
+      }
+    }
+
+    function animState(t) {
+      t = ((t % 1) + 1) % 1;
+      const signed = t < 0.5 ? (2 * t) : (2 * t - 2);
+      const rho = (Math.PI / 2) * Math.abs(signed);
+      const beta = (Math.PI / 2) * signed;
+      return { t, rho, beta };
+    }
+
+    const rVal = $('rVal');
+    const nLive = $('nLive');
+    const t0 = performance.now();
+    let lastNow = t0;
+    let simTime = 0;
+
+    function frame(now) {
+      requestAnimationFrame(frame);
+      const dt = Math.min(0.05, (now - lastNow) * 0.001);
+      lastNow = now;
+      if (!paused) simTime += dt;
+      tickFlow(dt);
+      const baseT = (simTime * rate) / CYCLE;
+      rVal.textContent = baseT.toFixed(2);
+      nLive.textContent = String(N);
+
+      if (autoSpin && !drag) rotY += 0.12 * dt;
+
+      if (ghost > 0.001) {
+        ctx.fillStyle = `rgba(5,5,12,${1 - ghost})`;
+        ctx.fillRect(0, 0, W, H);
+      } else {
+        ctx.fillStyle = '#05050c';
+        ctx.fillRect(0, 0, W, H);
+      }
+
+      if (starsOn) {
+        for (const s of stars) {
+          const q = proj(s);
+          const a = 0.25 + 0.55 * ((s[0] * 13.7 + s[1] * 7.1) % 1 + 1) % 1;
+          ctx.fillStyle = `rgba(220,230,255,${a})`;
+          ctx.fillRect(q.x, q.y, 1.2, 1.2);
+        }
+      }
+
+      const seg = segCount();
+      const doGlow = glow && N <= 160;
+      const doDots = showDots && N <= 220;
+      const doTrails = flyMode && showTrails && N <= 96;
+
+      if (showSphere && N <= 128) sphereWire();
+      if (showEq) strokePts(circlePts([0, 1, 0], Math.PI / 2, [0, 0, 0], 64), 'rgba(255,210,80,0.85)', 2);
+
+      const hueNow = hue0 + simTime * hueSpd;
+      const items = [];
+      for (let k = 0; k < N; k++) {
+        const stagger = N > 1 ? (phase * k) / N : 0;
+        const { rho, beta } = animState(baseT + stagger);
+        const lon = (2 * Math.PI * k) / N + simTime * drift + twist * beta;
+        const cl = Math.cos(lon), sl = Math.sin(lon);
+        const n = [Math.cos(beta) * cl, Math.sin(beta), Math.cos(beta) * sl];
+
+        if (flyMode && !paused) {
+          const spd = flyAmt * rate * (flyIn ? -1 : 1);
+          flight[k][0] += n[0] * spd * dt;
+          flight[k][1] += n[1] * spd * dt;
+          flight[k][2] += n[2] * spd * dt;
+        }
+        const off = flyMode ? flight[k] : [0, 0, 0];
+        const surfCenter = [R * Math.cos(rho) * n[0], R * Math.cos(rho) * n[1], R * Math.cos(rho) * n[2]];
+        const center = add(surfCenter, off);
+        const T = [R * cl, 0, R * sl];
+        const cz = rot(center)[2];
+        items.push({ k, rho, n, off, center, T, cz });
+      }
+      if (N <= 256) items.sort((a, b) => a.cz - b.cz);
+
+      const wScale = N > 200 ? Math.max(0.45, 1.4 - N / 700) : 1;
+
+      for (const it of items) {
+        const { k, rho, n, off, center, T } = it;
+        const h = hueNow + (k / Math.max(N, 1)) * 360;
+        const pul = 1 + pulse * Math.sin(simTime * 3.2 + k * 0.4);
+        const w = lineW * pul * wScale;
+        const col = hsla(h, 90, 62, N > 200 ? 0.7 : 0.95);
+
+        if (doTrails) {
+          const tr = trails[k];
+          tr.push(center.slice());
+          if (tr.length > TRAIL_LEN) tr.shift();
+          if (tr.length > 1) strokePts(tr.map(p => proj(p)), hsla(h, 80, 60, 0.35), 1.1);
+        }
+
+        if (rho > 1e-4) {
+          const pts = circlePts(n, rho, off, seg);
+          if (fillOn && fillAmt > 0 && N <= 180) fillPts(pts, hsla(h, 85, 55, fillAmt * pul));
+          if (doGlow) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            strokePts(pts, hsla(h, 100, 60, 0.12), w * 5.5);
+            strokePts(pts, hsla(h, 95, 70, 0.28), w * 2.4);
+            ctx.restore();
+          }
+          strokePts(pts, col, w);
+        }
+        if (doDots) {
+          drawDot(center, col, 3.6 * pul);
+          if (N <= 96) drawDot(T, 'rgba(255,210,80,0.9)', 2.8);
+        }
+        if (showNrm && N <= 96) {
+          const arrowLen = 0.4 + 0.2 * Math.sin(rho);
+          strokePts([
+            proj(center),
+            proj([center[0] + n[0] * arrowLen, center[1] + n[1] * arrowLen, center[2] + n[2] * arrowLen])
+          ], 'rgba(255,255,255,0.28)', 1.1);
+        }
+      }
+    }
+    frame(t0);
+  </script>
+</body>
+</html>
