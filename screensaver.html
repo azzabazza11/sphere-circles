@@ -107,7 +107,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.1.1 · tap Done or outside to close</div>
+    <div id="ver">v1.1.2 · tap Done or outside to close</div>
   </div>
   <div id="hint">Tap Controls to tweak · Done closes the panel<br>Use Reload if the phone shows an old version</div>
   <script>
@@ -118,7 +118,7 @@
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.1.1';
+    const APP_VER = '1.1.2';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -295,7 +295,7 @@
       if (r < 0.94) return Math.round(rnd(180,320));
       return Math.round(rnd(320,512));
     }
-    let flowTarget = {}, flowHold = 0;
+    var flowTarget = {}, flowHold = 0;
     function setSliderSilent(id, v) { const el=$(id); el.value=v; el.dispatchEvent(new Event('input')); }
     function setCheckSilent(id, on) { const el=$(id); el.checked=on; el.dispatchEvent(new Event('change')); }
     function pickFlowTarget(force) {

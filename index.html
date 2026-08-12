@@ -321,7 +321,7 @@
       fillAmt: v => { fillAmt = v; setSlider('fillAmt', v, true); },
       flyAmt: v => { flyAmt = v; setSlider('flyAmt', v, true); }
     };
-    let flowTarget = {}, flowHold = 0;
+    var flowTarget = {}, flowHold = 0;
     function rnd(a, b) { return a + Math.random() * (b - a); }
     function pickCount() {
       const roll = Math.random();
@@ -560,7 +560,7 @@
     frame(t0);
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./service-worker.js?v=1.1.1').catch(() => {});
+      navigator.serviceWorker.register('./service-worker.js?v=1.1.2').catch(() => {});
     }
   </script>
 </body>
