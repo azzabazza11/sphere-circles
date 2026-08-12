@@ -107,18 +107,19 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.1.3 · tap Done or outside to close</div>
+    <div id="ver">v1.1.4 · tap Done · pinch to zoom or outside to close</div>
   </div>
   <div id="hint">Tap Controls to tweak · Done closes the panel<br>Use Reload if the phone shows an old version</div>
   <script>
     const $ = (id) => document.getElementById(id);
     let N = 16, phase = 0.35, rate = 1, twist = 0, drift = 0;
     let flyMode = false, flyAmt = 0.55, flyIn = false, flyVel = false, showTrails = true;
+    let flyBlend = 0; // 0 = on sphere, 1 = full fly (smooth settle)
     let showEq = true, showDots = true, glow = true, fillOn = false, starsOn = true, autoSpin = true;
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.1.3';
+    const APP_VER = '1.1.4';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -241,9 +242,9 @@
       return [v[0] * c, v[1], -v[0] * s];
     }
     function flyOffset(t, lon) {
-      if (!flyMode) return [0, 0, 0];
+      if (flyBlend < 1e-4) return [0, 0, 0];
       const local = sampleFlyLocal(t);
-      const s = flyAmt * (flyIn ? -1 : 1);
+      const s = flyAmt * (flyIn ? -1 : 1) * flyBlend;
       return rotateY([local[0] * s, local[1] * s, 0], lon);
     }
 
@@ -252,6 +253,7 @@
     let W, H, cx, cy, scale, dpr;
     let rotY = 0.7, rotX = 0.32, zoom = 280;
     let drag = false, lx = 0, ly = 0, pointers = new Map();
+    let pinchStartDist = 0, pinchStartZoom = 280;
     function resize() {
       dpr = Math.min(devicePixelRatio || 1, 2);
       W = innerWidth; H = innerHeight;
@@ -263,21 +265,59 @@
     addEventListener('resize', resize);
     addEventListener('orientationchange', () => setTimeout(resize, 200));
 
+    function pinchDist() {
+      if (pointers.size < 2) return 0;
+      const pts = Array.from(pointers.values());
+      const dx = pts[0].x - pts[1].x, dy = pts[0].y - pts[1].y;
+      return Math.hypot(dx, dy) || 0;
+    }
+    function beginPinch() {
+      pinchStartDist = pinchDist();
+      pinchStartZoom = zoom;
+      drag = false;
+    }
     function onDown(x, y, id) {
       if (panel.classList.contains('open')) { closePanel(); return; }
-      pointers.set(id, {x,y}); drag = true; lx = x; ly = y; hideHint(); keepAwake();
+      pointers.set(id, { x, y });
+      hideHint(); keepAwake();
+      if (pointers.size >= 2) beginPinch();
+      else { drag = true; lx = x; ly = y; }
     }
     function onMove(x, y, id) {
       if (!pointers.has(id)) return;
-      rotY += (x-lx)*0.008;
-      rotX = Math.max(-1.4, Math.min(1.4, rotX + (y-ly)*0.008));
+      pointers.set(id, { x, y });
+      if (pointers.size >= 2) {
+        const d = pinchDist();
+        if (pinchStartDist > 8 && d > 8) {
+          zoom = Math.max(40, Math.min(2000, pinchStartZoom * (d / pinchStartDist)));
+        }
+        return;
+      }
+      if (!drag) return;
+      rotY += (x - lx) * 0.008;
+      rotX = Math.max(-1.4, Math.min(1.4, rotX + (y - ly) * 0.008));
       lx = x; ly = y;
     }
-    function onUp(id) { pointers.delete(id); if (!pointers.size) drag = false; }
+    function onUp(id) {
+      pointers.delete(id);
+      if (pointers.size >= 2) beginPinch();
+      else if (pointers.size === 1) {
+        const p = pointers.values().next().value;
+        drag = true; lx = p.x; ly = p.y;
+        pinchStartDist = 0;
+      } else {
+        drag = false;
+        pinchStartDist = 0;
+      }
+    }
     canvas.addEventListener('pointerdown', e => { e.preventDefault(); canvas.setPointerCapture(e.pointerId); onDown(e.clientX, e.clientY, e.pointerId); });
     canvas.addEventListener('pointermove', e => { e.preventDefault(); onMove(e.clientX, e.clientY, e.pointerId); });
     canvas.addEventListener('pointerup', e => onUp(e.pointerId));
     canvas.addEventListener('pointercancel', e => onUp(e.pointerId));
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      zoom = Math.max(40, Math.min(2000, zoom - e.deltaY * 0.45));
+    }, { passive: false });
 
     let wakeLock = null;
     async function keepAwake() {
@@ -397,8 +437,12 @@
       const dt = Math.min(0.05, (now-lastNow)*0.001); lastNow = now;
       if (!paused) simTime += dt;
       tickFlow(dt);
+      // smooth settle when toggling fly
+      const flyTarget = flyMode ? 1 : 0;
+      flyBlend += (flyTarget - flyBlend) * Math.min(1, dt * 2.8);
+      if (Math.abs(flyBlend - flyTarget) < 0.001) flyBlend = flyTarget;
       const baseT = (simTime * rate) / CYCLE;
-      if (autoSpin && !drag) rotY += 0.08 * dt;
+      if (autoSpin && !drag && pointers.size < 2) rotY += 0.08 * dt;
 
       if (ghost > 0.001) { ctx.fillStyle = `rgba(5,5,12,${1-ghost})`; ctx.fillRect(0,0,W,H); }
       else { ctx.fillStyle = '#05050c'; ctx.fillRect(0,0,W,H); }
@@ -413,7 +457,7 @@
       const seg = segCount();
       const doGlow = glow && N <= 140;
       const doDots = showDots && N <= 180;
-      const doTrails = flyMode && showTrails && N <= 64;
+      const doTrails = flyBlend > 0.04 && showTrails && N <= 64;
       if (showEq) strokePts(circlePts([0,1,0], Math.PI/2, [0,0,0], 48), 'rgba(255,210,80,0.85)', 2);
 
       const hueNow = hue0 + simTime * hueSpd;

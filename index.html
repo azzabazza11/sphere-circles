@@ -123,6 +123,7 @@
 
     let N = 16, phase = 0.35, rate = 1, twist = 0, drift = 0, paused = false;
     let flyMode = false, flyAmt = 0.55, flyIn = false, flyVel = false, showTrails = true;
+    let flyBlend = 0;
     let showSphere = false, showEq = true, showDots = true, showNrm = false;
     let glow = true, fillOn = false, starsOn = true, autoSpin = true;
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
@@ -183,9 +184,9 @@
       return [v[0] * c, v[1], -v[0] * s];
     }
     function flyOffset(t, lon) {
-      if (!flyMode) return [0, 0, 0];
+      if (flyBlend < 1e-4) return [0, 0, 0];
       const local = sampleFlyLocal(t);
-      const s = flyAmt * (flyIn ? -1 : 1);
+      const s = flyAmt * (flyIn ? -1 : 1) * flyBlend;
       return rotateY([local[0] * s, local[1] * s, 0], lon);
     }
 
@@ -485,6 +486,9 @@
       lastNow = now;
       if (!paused) simTime += dt;
       tickFlow(dt);
+      const flyTarget = flyMode ? 1 : 0;
+      flyBlend += (flyTarget - flyBlend) * Math.min(1, dt * 2.8);
+      if (Math.abs(flyBlend - flyTarget) < 0.001) flyBlend = flyTarget;
       const baseT = (simTime * rate) / CYCLE;
       rVal.textContent = baseT.toFixed(2);
       nLive.textContent = String(N);
@@ -504,7 +508,7 @@
       const seg = segCount();
       const doGlow = glow && N <= 160;
       const doDots = showDots && N <= 220;
-      const doTrails = flyMode && showTrails && N <= 96;
+      const doTrails = flyBlend > 0.04 && showTrails && N <= 96;
       if (showSphere && N <= 128) sphereWire();
       if (showEq) strokePts(circlePts([0,1,0], Math.PI/2, [0,0,0], 64), 'rgba(255,210,80,0.85)', 2);
 
@@ -562,7 +566,7 @@
     frame(t0);
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./service-worker.js?v=1.1.3').catch(() => {});
+      navigator.serviceWorker.register('./service-worker.js?v=1.1.4').catch(() => {});
     }
   </script>
 </body>
