@@ -127,6 +127,7 @@
     let glow = true, fillOn = false, starsOn = true, autoSpin = true;
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = false, flowSpd = 0.55, flowMuteUI = false;
+    let controlsReady = false;
 
     const trails = Array.from({ length: MAX_N }, () => []);
     function clearTrails() { for (let i = 0; i < MAX_N; i++) trails[i].length = 0; }
@@ -211,10 +212,10 @@
     bindRange('drift', 'driftVal', parseFloat, v => v.toFixed(2), v => drift = v);
     bindRange('flowSpd', 'flowSpdVal', parseFloat, v => v.toFixed(2), v => flowSpd = v);
     bindCheck('pause', 'pauseVal', v => paused = v);
-    bindCheck('autoFlow', 'autoFlowVal', v => { autoFlow = v; if (v && !flowMuteUI) pickFlowTarget(true); });
+    bindCheck('autoFlow', 'autoFlowVal', v => { autoFlow = v; if (v && controlsReady && !flowMuteUI) pickFlowTarget(true); });
     bindCheck('flyMode', 'flyModeVal', v => { flyMode = v; if (!flowMuteUI) clearTrails(); });
     bindRange('flyAmt', 'flyAmtVal', parseFloat, v => v.toFixed(2), v => flyAmt = v);
-    bindCheck('flyVel', 'flyVelVal', v => { flyVel = v; rebuildFlyTable(); clearTrails(); });
+    bindCheck('flyVel', 'flyVelVal', v => { flyVel = v; if (controlsReady) { rebuildFlyTable(); clearTrails(); } });
     bindCheck('flyIn', 'flyInVal', v => flyIn = v);
     bindCheck('showTrails', 'trailsVal', v => showTrails = v);
     bindCheck('showSphere', 'sphereVal', v => showSphere = v);
@@ -557,10 +558,11 @@
         }
       }
     }
+    controlsReady = true;
     frame(t0);
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./service-worker.js?v=1.1.2').catch(() => {});
+      navigator.serviceWorker.register('./service-worker.js?v=1.1.3').catch(() => {});
     }
   </script>
 </body>

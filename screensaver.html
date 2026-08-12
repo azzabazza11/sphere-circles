@@ -107,7 +107,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.1.2 · tap Done or outside to close</div>
+    <div id="ver">v1.1.3 · tap Done or outside to close</div>
   </div>
   <div id="hint">Tap Controls to tweak · Done closes the panel<br>Use Reload if the phone shows an old version</div>
   <script>
@@ -118,7 +118,7 @@
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.1.2';
+    const APP_VER = '1.1.3';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -159,6 +159,7 @@
       navigator.serviceWorker.register('./service-worker.js?v=' + APP_VER).catch(() => {});
     }
 
+    let controlsReady = false;
     const bindRange = (id, valId, parse, fmt, apply) => {
       const el = $(id), out = $(valId);
       const go = () => { const v = parse(el.value); out.textContent = fmt(v); apply(v); };
@@ -175,10 +176,10 @@
     bindRange('twist', 'twistVal', parseFloat, v => v.toFixed(2), v => twist = v);
     bindRange('drift', 'driftVal', parseFloat, v => v.toFixed(2), v => drift = v);
     bindRange('flowSpd', 'flowSpdVal', parseFloat, v => v.toFixed(2), v => flowSpd = v);
-    bindCheck('autoFlow', 'autoFlowVal', v => { autoFlow = v; if (v) pickFlowTarget(true); });
+    bindCheck('autoFlow', 'autoFlowVal', v => { autoFlow = v; if (v && controlsReady) pickFlowTarget(true); });
     bindCheck('autoSpin', 'spinVal', v => autoSpin = v);
-    bindCheck('flyMode', 'flyModeVal', v => { flyMode = v; clearTrails(); });
-    bindCheck('flyVel', 'flyVelVal', v => { flyVel = v; rebuildFlyTable(); clearTrails(); });
+    bindCheck('flyMode', 'flyModeVal', v => { flyMode = v; if (controlsReady) clearTrails(); });
+    bindCheck('flyVel', 'flyVelVal', v => { flyVel = v; if (controlsReady) { rebuildFlyTable(); clearTrails(); } });
     bindCheck('flyIn', 'flyInVal', v => flyIn = v);
     bindCheck('showTrails', 'trailsVal', v => showTrails = v);
     bindRange('flyAmt', 'flyAmtVal', parseFloat, v => v.toFixed(2), v => flyAmt = v);
@@ -320,7 +321,9 @@
       }
       flowHold = rnd(12,24)/Math.max(0.2, flowSpd);
     }
-    pickFlowTarget(true);
+    rebuildFlyTable();
+    controlsReady = true;
+    if (autoFlow) pickFlowTarget(true);
     function tickFlow(dt) {
       if (!autoFlow || paused) return;
       flowHold -= dt; if (flowHold <= 0) pickFlowTarget(false);
