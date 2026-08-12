@@ -109,6 +109,34 @@
       font-family: system-ui, sans-serif; font-size: 13px; text-shadow: 0 1px 8px #000;
       pointer-events: none; opacity: 1; transition: opacity 1.2s ease; padding: 0 20px;
     }
+
+    #qrModal {
+      display: none; position: fixed; inset: 0; z-index: 20;
+      background: rgba(0,0,0,0.72); align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    #qrModal.open { display: flex; }
+    #qrCard {
+      background: #10141e; border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 16px; padding: 18px 18px 14px; text-align: center;
+      max-width: 300px; width: 100%;
+      font-family: system-ui, sans-serif; color: #d0d6e0;
+    }
+    #qrCard img {
+      width: 220px; height: 220px; border-radius: 10px; background: #fff;
+      display: block; margin: 0 auto 12px;
+    }
+    #qrUrl {
+      font-size: 11px; color: #8ab; word-break: break-all; margin-bottom: 12px; line-height: 1.35;
+    }
+    #qrCard .qr-actions { display: flex; gap: 8px; }
+    #qrCard .qr-actions button {
+      flex: 1; border: 0; border-radius: 10px; padding: 12px 8px;
+      font: 650 14px system-ui, sans-serif; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #qrClose { background: #44ffaa; color: #062218; }
+    #qrCopy { background: rgba(255,255,255,0.1); color: #e8eef8; }
     #hint.hide { opacity: 0; }
   </style>
 </head>
@@ -145,7 +173,7 @@
           <label>Inward <input id="flyIn" type="checkbox"><span class="val" id="flyInVal">off</span></label>
           <label>Trails <input id="showTrails" type="checkbox" checked><span class="val" id="trailsVal">on</span></label>
         </div>
-        <label>Altitude <input id="flyAlt" type="range" min="0" max="1.2" step="0.01" value="0.35"><span class="val" id="flyAltVal">0.35</span></label>
+        <label>Fly spd <input id="flyAlt" type="range" min="0" max="2" step="0.01" value="0.55"><span class="val" id="flyAltVal">0.55</span></label>
       </div>
     </div>
     <div class="acc" data-acc>
@@ -165,22 +193,35 @@
       </div>
     </div>
     <div class="actions">
+      <button id="shareBtn" type="button" style="background:rgba(127,212,255,0.18);color:#cfefff;border:1px solid rgba(127,212,255,0.35)">Share</button>
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.3.0 · concertina sections · fat sliders · tap jumps flow</div>
+    <div id="ver">v1.3.2 · normal-integral fly · Share QR · concertina sections · fat sliders · tap jumps flow</div>
   </div>
+  
+  <div id="qrModal">
+    <div id="qrCard">
+      <img id="qrImg" width="220" height="220" alt="Share QR">
+      <div id="qrUrl"></div>
+      <div class="qr-actions">
+        <button type="button" id="qrCopy">Copy link</button>
+        <button type="button" id="qrClose">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div id="hint">Flow: one slider wanders · tap canvas to jump slider<br>Pinch zoom · Controls for more</div>
   <script>
     const $ = (id) => document.getElementById(id);
     let N = 16, phase = 0.35, rate = 1, twist = 0, drift = 0;
-    let flyMode = false, flyAlt = 0.35, flyIn = false, flyVel = false, showTrails = true;
+    let flyMode = false, flyAlt = 0.55, flyIn = false, flyVel = false, showTrails = true;
     let flyBlend = 0; // 0 = on sphere, 1 = full fly (smooth settle)
     let showEq = true, showDots = true, glow = true, fillOn = false, starsOn = true, autoSpin = true;
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.3.0';
+    const APP_VER = '1.3.2';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -206,8 +247,76 @@
     $('doneBtn').addEventListener('click', e => {
       e.preventDefault(); e.stopPropagation(); closePanel();
     });
-    $('reloadBtn').addEventListener('click', e => {
+
+    function shareUrl() {
+      try {
+        const u = new URL(location.href);
+        u.searchParams.set('v', typeof APP_VER !== 'undefined' ? APP_VER : '1.3.1');
+        return u.toString();
+      } catch (e) {
+        return location.href;
+      }
+    }
+    function openQr() {
+      const url = shareUrl();
+      const img = $('qrImg');
+      const label = $('qrUrl');
+      if (label) label.textContent = url;
+      if (img) {
+        img.alt = 'QR for ' + url;
+        img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=10&data=' + encodeURIComponent(url);
+      }
+      const modal = $('qrModal');
+      if (modal) modal.classList.add('open');
+    }
+    function closeQr() {
+      const modal = $('qrModal');
+      if (modal) modal.classList.remove('open');
+    }
+    if ($('shareBtn')) {
+      $('shareBtn').addEventListener('click', e => {
+        e.preventDefault(); e.stopPropagation();
+        closePanel();
+        openQr();
+      });
+    }
+    if ($('qrClose')) $('qrClose').addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); closeQr(); });
+    if ($('qrCopy')) {
+      $('qrCopy').addEventListener('click', async e => {
+        e.preventDefault(); e.stopPropagation();
+        const url = shareUrl();
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) await navigator.clipboard.writeText(url);
+          else {
+            const ta = document.createElement('textarea');
+            ta.value = url; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+          }
+          $('qrCopy').textContent = 'Copied';
+          setTimeout(() => { $('qrCopy').textContent = 'Copy link'; }, 1200);
+        } catch (err) {
+          $('qrCopy').textContent = 'Copy failed';
+          setTimeout(() => { $('qrCopy').textContent = 'Copy link'; }, 1200);
+        }
+      });
+    }
+    if ($('qrModal')) {
+      $('qrModal').addEventListener('click', e => {
+        if (e.target === $('qrModal')) closeQr();
+      });
+    }
+
+    $('reloadBtn').addEventListener('click', async e => {
       e.preventDefault(); e.stopPropagation();
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(r => r.unregister()));
+        }
+        if (window.caches) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map(k => caches.delete(k)));
+        }
+      } catch (err) {}
       const u = new URL(location.href);
       u.searchParams.set('v', APP_VER);
       u.searchParams.set('r', String(Date.now()));
@@ -274,7 +383,7 @@
     bindCheck('autoFlow', 'autoFlowVal', v => { autoFlow = v; if (v && controlsReady) pickFlowSlider(); syncQuick(); });
     bindCheck('autoSpin', 'spinVal', v => autoSpin = v);
     bindCheck('flyMode', 'flyModeVal', v => { flyMode = v; if (controlsReady) clearTrails(); syncQuick(); });
-    bindCheck('flyVel', 'flyVelVal', v => { flyVel = v; });
+    bindCheck('flyVel', 'flyVelVal', v => { flyVel = v; if (controlsReady) { rebuildFlyTable(); clearTrails(); } });
     bindCheck('flyIn', 'flyInVal', v => flyIn = v);
     bindCheck('showTrails', 'trailsVal', v => showTrails = v);
     bindRange('flyAlt', 'flyAltVal', parseFloat, v => v.toFixed(2), v => flyAlt = v);
@@ -295,21 +404,55 @@
     }
 
 
-    // Altitude-capped fly: lift along plane normal, optional inward toward origin.
-    // Vel by R scales how high for the current circle size (no unbounded speed path).
-    const FLY_ALT_MAX = 1.2;
-    function flyOffset(rho, n) {
-      if (flyBlend < 1e-4 || flyAlt <= 1e-6) return [0, 0, 0];
-      const env = flyVel ? (0.18 + 0.82 * Math.sin(rho)) : 1;
-      let lift = Math.min(FLY_ALT_MAX, Math.max(0, flyAlt)) * flyBlend * env;
-      if (flyIn) {
-        // pull center toward origin along -n, never past the origin
-        const along = Math.max(0, R * Math.cos(rho));
-        lift = Math.min(lift, along * 0.98);
-        return [-n[0] * lift, -n[1] * lift, -n[2] * lift];
+    // Fly: integrate travel along the circle-plane normal as that normal tilts.
+    // Path is built on meridian 0 then spun by longitude so phased circles stay in sequence.
+    // Raw ∫n has a small net equatorial drift per cycle; we remove it so the path returns
+    // (matches the grow/shrink symmetry — circles come home each cycle).
+    var flyTable = [[0, 0]];
+    var flyEnd = [0, 0];
+    function rebuildFlyTable() {
+      const n = 512;
+      const tab = [[0, 0]];
+      let x = 0, y = 0;
+      for (let i = 1; i <= n; i++) {
+        const t0 = (i - 1) / n;
+        const t1 = i / n;
+        const st = animState(t0);
+        const nx = Math.cos(st.beta), ny = Math.sin(st.beta);
+        let w = 1;
+        if (flyVel) w = 0.18 + 0.82 * Math.sin(st.rho); // slow when tiny, fast when open
+        const ds = (t1 - t0) * CYCLE;
+        x += nx * w * ds;
+        y += ny * w * ds;
+        tab.push([x, y]);
       }
-      return [n[0] * lift, n[1] * lift, n[2] * lift];
+      flyTable = tab;
+      flyEnd = [x, y];
     }
+    function sampleFlyLocal(t) {
+      t = ((t % 1) + 1) % 1;
+      const n = flyTable.length - 1;
+      const idx = t * n;
+      const i0 = Math.floor(idx);
+      const i1 = Math.min(n, i0 + 1);
+      const u = idx - i0;
+      const a = flyTable[i0], b = flyTable[i1];
+      const lx = a[0] + (b[0] - a[0]) * u;
+      const ly = a[1] + (b[1] - a[1]) * u;
+      // close the loop: subtract linear drift so off(0) = off(1) = 0
+      return [lx - t * flyEnd[0], ly - t * flyEnd[1], 0];
+    }
+    function rotateY(v, lon) {
+      const c = Math.cos(lon), s = Math.sin(lon);
+      return [v[0] * c, v[1], -v[0] * s];
+    }
+    function flyOffset(t, lon) {
+      if (flyBlend < 1e-4 || flyAlt <= 1e-6) return [0, 0, 0];
+      const local = sampleFlyLocal(t);
+      const s = flyAlt * (flyIn ? -1 : 1) * flyBlend;
+      return rotateY([local[0] * s, local[1] * s, 0], lon);
+    }
+    rebuildFlyTable();
 
 
 
@@ -417,7 +560,7 @@
       { key:'hueSpd', id:'hueSpd', min:0, max:80, get:()=>hueSpd, set:v=>{ hueSpd=v; setSliderSilent('hueSpd', v); } },
       { key:'pulse', id:'pulse', min:0, max:1, get:()=>pulse, set:v=>{ pulse=v; setSliderSilent('pulse', v); } },
       { key:'ghost', id:'ghost', min:0, max:0.92, get:()=>ghost, set:v=>{ ghost=v; setSliderSilent('ghost', v); } },
-      { key:'flyAlt', id:'flyAlt', min:0, max:1.2, get:()=>flyAlt, set:v=>{ flyAlt=v; setSliderSilent('flyAlt', v); } },
+      { key:'flyAlt', id:'flyAlt', min:0, max:2, get:()=>flyAlt, set:v=>{ flyAlt=v; setSliderSilent('flyAlt', v); } },
       { key:'hue0', id:null, min:0, max:360, get:()=>hue0, set:v=>{ hue0=((v%360)+360)%360; } }
     ];
     var flowKey = null, flowDir = 1, flowHold = 0;
@@ -526,7 +669,7 @@
         const lon = (2*Math.PI*k)/N + simTime*drift + twist*beta;
         const cl = Math.cos(lon), sl = Math.sin(lon);
         const n = [Math.cos(beta)*cl, Math.sin(beta), Math.cos(beta)*sl];
-        const off = flyOffset(rho, n);
+        const off = flyOffset(tk, lon);
         const center = add([R*Math.cos(rho)*n[0], R*Math.cos(rho)*n[1], R*Math.cos(rho)*n[2]], off);
         items.push({ k, rho, n, off, center, T:[R*cl,0,R*sl], cz: rot(center)[2] });
       }
