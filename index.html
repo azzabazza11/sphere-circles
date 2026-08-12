@@ -28,23 +28,36 @@
       backdrop-filter: blur(8px);
     }
     #panel h1 { font-size: 13px; font-weight: 650; letter-spacing: 0.04em; color: #fff; margin: 0 0 8px; }
-    #panel h2 {
-      font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em;
-      color: #7fd4ff; margin: 12px 0 6px; border-top: 1px solid rgba(255,255,255,0.08);
-      padding-top: 8px;
+    #panel .acc { border-top: 1px solid rgba(255,255,255,0.08); }
+    #panel .acc:first-of-type { border-top: none; }
+    #panel .acc-h {
+      width: 100%; display: flex; justify-content: space-between; align-items: center;
+      background: transparent; border: 0; color: #7fd4ff; cursor: pointer;
+      font: 650 11px system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.12em;
+      padding: 12px 0;
     }
-    #panel h2:first-of-type { border-top: none; padding-top: 0; margin-top: 4px; }
+    #panel .acc-h::after { content: '▸'; color: #668; }
+    #panel .acc.open .acc-h::after { content: '▾'; }
+    #panel .acc-b { display: none; padding-bottom: 6px; }
+    #panel .acc.open .acc-b { display: block; }
     #panel label {
       display: grid; grid-template-columns: 72px 1fr 42px;
-      align-items: center; gap: 8px; font-size: 12px; margin: 5px 0;
+      align-items: center; gap: 8px; font-size: 12px; margin: 8px 0; min-height: 34px;
     }
-    #panel input[type="range"] { width: 100%; accent-color: #44ffaa; cursor: pointer; }
+    #panel input[type="range"] {
+      width: 100%; height: 28px; accent-color: #44ffaa; cursor: pointer;
+      -webkit-appearance: none; appearance: none; background: transparent;
+    }
+    #panel input[type="range"]::-webkit-slider-runnable-track {
+      height: 10px; border-radius: 999px; background: rgba(255,255,255,0.14);
+    }
+    #panel input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 26px; height: 26px; margin-top: -8px;
+      border-radius: 50%; background: #44ffaa; border: 2px solid #0a1a14;
+    }
     #panel .val { color: #44ffaa; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; font-size: 11px; }
-    #panel input[type="checkbox"] { width: 16px; height: 16px; accent-color: #44ffaa; cursor: pointer; justify-self: start; }
-    .presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
-    .presets button {
-      background: rgba(68,255,170,0.12); color: #c8ffe8; border: 1px solid rgba(68,255,170,0.35);
-      border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer;
+    #panel input[type="checkbox"] {
+      width: 20px; height: 20px; accent-color: #44ffaa; cursor: pointer; justify-self: start;
     }
     .presets button:hover { background: rgba(68,255,170,0.22); }
     #hint { color: #889; font-size: 10px; margin-top: 10px; line-height: 1.4; }
@@ -79,39 +92,49 @@
       <button data-preset="dense">Dense</button>
     </div>
 
-    <h2>Motion</h2>
-    <label>Circles <input id="count" type="range" min="1" max="108" step="1" value="16"><span class="val" id="countVal">16</span></label>
-    <label>Phase <input id="phase" type="range" min="0" max="1" step="0.001" value="0.35"><span class="val" id="phaseVal">0.35</span></label>
-    <label>Rate <input id="rate" type="range" min="0.05" max="4" step="0.01" value="1"><span class="val" id="rateVal">1.00×</span></label>
-    <label>Twist <input id="twist" type="range" min="0" max="4" step="0.01" value="0"><span class="val" id="twistVal">0.00</span></label>
-    <label>Drift <input id="drift" type="range" min="0" max="2" step="0.01" value="0"><span class="val" id="driftVal">0.00</span></label>
-    <label>Auto flow <input id="autoFlow" type="checkbox"><span class="val" id="autoFlowVal">off</span></label>
-    <label>Flow spd <input id="flowSpd" type="range" min="0.15" max="2" step="0.01" value="0.55"><span class="val" id="flowSpdVal">0.55</span></label>
-    <label>Pause <input id="pause" type="checkbox"><span class="val" id="pauseVal">off</span></label>
-
-    <h2>Fly</h2>
-    <label>Fly <input id="flyMode" type="checkbox"><span class="val" id="flyModeVal">off</span></label>
-    <label>Altitude <input id="flyAlt" type="range" min="0" max="1.2" step="0.01" value="0.35"><span class="val" id="flyAltVal">0.35</span></label>
-    <label>Vel by R <input id="flyVel" type="checkbox"><span class="val" id="flyVelVal">off</span></label>
-    <label>Inward <input id="flyIn" type="checkbox"><span class="val" id="flyInVal">off</span></label>
-    <label>Trails <input id="showTrails" type="checkbox" checked><span class="val" id="trailsVal">on</span></label>
-
-    <h2>Look</h2>
-    <label>Sphere <input id="showSphere" type="checkbox"><span class="val" id="sphereVal">off</span></label>
-    <label>Equator <input id="showEq" type="checkbox" checked><span class="val" id="eqVal">on</span></label>
-    <label>Dots <input id="showDots" type="checkbox" checked><span class="val" id="dotsVal">on</span></label>
-    <label>Normals <input id="showNrm" type="checkbox"><span class="val" id="nrmVal">off</span></label>
-    <label>Glow <input id="glow" type="checkbox" checked><span class="val" id="glowVal">on</span></label>
-    <label>Fill <input id="fillOn" type="checkbox"><span class="val" id="fillVal">off</span></label>
-    <label>Stars <input id="starsOn" type="checkbox" checked><span class="val" id="starsVal">on</span></label>
-    <label>Orbit <input id="autoSpin" type="checkbox" checked><span class="val" id="spinVal">on</span></label>
-    <label>Width <input id="width" type="range" min="0.4" max="5" step="0.05" value="1.6"><span class="val" id="widthVal">1.60</span></label>
-    <label>Hue <input id="hue" type="range" min="0" max="360" step="1" value="0"><span class="val" id="hueVal">0</span></label>
-    <label>Hue spd <input id="hueSpd" type="range" min="0" max="80" step="0.5" value="8"><span class="val" id="hueSpdVal">8.0</span></label>
-    <label>Pulse <input id="pulse" type="range" min="0" max="1" step="0.01" value="0.25"><span class="val" id="pulseVal">0.25</span></label>
-    <label>Ghost <input id="ghost" type="range" min="0" max="0.92" step="0.01" value="0.18"><span class="val" id="ghostVal">0.18</span></label>
-    <label>Fill amt <input id="fillAmt" type="range" min="0" max="0.35" step="0.005" value="0.06"><span class="val" id="fillAmtVal">0.06</span></label>
-    <p id="hint">Fly paths are exact rotated copies (perfect sequence). Vel by R = faster when the circle is larger.</p>
+    <div class="acc open" data-acc>
+      <button type="button" class="acc-h">Motion</button>
+      <div class="acc-b">
+        <label>Circles <input id="count" type="range" min="1" max="108" step="1" value="16"><span class="val" id="countVal">16</span></label>
+        <label>Phase <input id="phase" type="range" min="0" max="1" step="0.001" value="0.35"><span class="val" id="phaseVal">0.35</span></label>
+        <label>Rate <input id="rate" type="range" min="0.05" max="4" step="0.01" value="1"><span class="val" id="rateVal">1.00×</span></label>
+        <label>Twist <input id="twist" type="range" min="0" max="4" step="0.01" value="0"><span class="val" id="twistVal">0.00</span></label>
+        <label>Drift <input id="drift" type="range" min="0" max="2" step="0.01" value="0"><span class="val" id="driftVal">0.00</span></label>
+        <label>Auto flow <input id="autoFlow" type="checkbox"><span class="val" id="autoFlowVal">off</span></label>
+        <label>Flow spd <input id="flowSpd" type="range" min="0.15" max="2" step="0.01" value="0.55"><span class="val" id="flowSpdVal">0.55</span></label>
+        <label>Pause <input id="pause" type="checkbox"><span class="val" id="pauseVal">off</span></label>
+      </div>
+    </div>
+    <div class="acc" data-acc>
+      <button type="button" class="acc-h">Fly</button>
+      <div class="acc-b">
+        <label>Fly <input id="flyMode" type="checkbox"><span class="val" id="flyModeVal">off</span></label>
+        <label>Altitude <input id="flyAlt" type="range" min="0" max="1.2" step="0.01" value="0.35"><span class="val" id="flyAltVal">0.35</span></label>
+        <label>Vel by R <input id="flyVel" type="checkbox"><span class="val" id="flyVelVal">off</span></label>
+        <label>Inward <input id="flyIn" type="checkbox"><span class="val" id="flyInVal">off</span></label>
+        <label>Trails <input id="showTrails" type="checkbox" checked><span class="val" id="trailsVal">on</span></label>
+      </div>
+    </div>
+    <div class="acc" data-acc>
+      <button type="button" class="acc-h">Look</button>
+      <div class="acc-b">
+        <label>Sphere <input id="showSphere" type="checkbox"><span class="val" id="sphereVal">off</span></label>
+        <label>Equator <input id="showEq" type="checkbox" checked><span class="val" id="eqVal">on</span></label>
+        <label>Dots <input id="showDots" type="checkbox" checked><span class="val" id="dotsVal">on</span></label>
+        <label>Normals <input id="showNrm" type="checkbox"><span class="val" id="nrmVal">off</span></label>
+        <label>Glow <input id="glow" type="checkbox" checked><span class="val" id="glowVal">on</span></label>
+        <label>Fill <input id="fillOn" type="checkbox"><span class="val" id="fillVal">off</span></label>
+        <label>Stars <input id="starsOn" type="checkbox" checked><span class="val" id="starsVal">on</span></label>
+        <label>Orbit <input id="autoSpin" type="checkbox" checked><span class="val" id="spinVal">on</span></label>
+        <label>Width <input id="width" type="range" min="0.4" max="5" step="0.05" value="1.6"><span class="val" id="widthVal">1.60</span></label>
+        <label>Hue <input id="hue" type="range" min="0" max="360" step="1" value="0"><span class="val" id="hueVal">0</span></label>
+        <label>Hue spd <input id="hueSpd" type="range" min="0" max="80" step="0.5" value="8"><span class="val" id="hueSpdVal">8.0</span></label>
+        <label>Pulse <input id="pulse" type="range" min="0" max="1" step="0.01" value="0.25"><span class="val" id="pulseVal">0.25</span></label>
+        <label>Ghost <input id="ghost" type="range" min="0" max="0.92" step="0.01" value="0.18"><span class="val" id="ghostVal">0.18</span></label>
+        <label>Fill amt <input id="fillAmt" type="range" min="0" max="0.35" step="0.005" value="0.06"><span class="val" id="fillAmtVal">0.06</span></label>
+      </div>
+    </div>
+    <p id="hint">Flow wanders one slider at a time (tap canvas to jump). Concertina sections · fat sliders.</p>
   </div>
   <div id="quick">
     <button type="button" id="quickFly">Fly</button>
@@ -213,7 +236,7 @@
       $('quickFly').addEventListener('click', () => toggleCheck('flyMode', !$('flyMode').checked));
       $('quickFlow').addEventListener('click', () => toggleCheck('autoFlow', !$('autoFlow').checked));
     }
-    bindCheck('autoFlow', 'autoFlowVal', v => { autoFlow = v; if (v && controlsReady && !flowMuteUI) pickFlowTarget(true); syncQuick(); });
+    bindCheck('autoFlow', 'autoFlowVal', v => { autoFlow = v; if (v && controlsReady && !flowMuteUI) pickFlowSlider(); syncQuick(); });
     bindCheck('flyMode', 'flyModeVal', v => { flyMode = v; if (!flowMuteUI) clearTrails(); syncQuick(); });
     bindRange('flyAlt', 'flyAltVal', parseFloat, v => v.toFixed(2), v => flyAlt = v);
     bindCheck('flyVel', 'flyVelVal', v => { flyVel = v; });
@@ -290,6 +313,14 @@
     document.querySelectorAll('[data-preset]').forEach(btn => {
       btn.addEventListener('click', () => presets[btn.dataset.preset]());
     });
+    document.querySelectorAll('[data-acc] .acc-h').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const acc = btn.closest('[data-acc]');
+        const open = !acc.classList.contains('open');
+        document.querySelectorAll('[data-acc]').forEach(a => a.classList.remove('open'));
+        if (open) acc.classList.add('open');
+      });
+    });
     addEventListener('keydown', e => {
       if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
         e.preventDefault();
@@ -298,82 +329,41 @@
       }
     });
 
-    const flowKeys = [
-      { id: 'count', key: 'N', int: true }, { id: 'phase', key: 'phase' }, { id: 'rate', key: 'rate' },
-      { id: 'twist', key: 'twist' }, { id: 'drift', key: 'drift' }, { id: 'width', key: 'lineW' },
-      { id: 'hue', key: 'hue0' }, { id: 'hueSpd', key: 'hueSpd' }, { id: 'pulse', key: 'pulse' },
-      { id: 'ghost', key: 'ghost' }, { id: 'fillAmt', key: 'fillAmt' }, { id: 'flyAlt', key: 'flyAlt' }
-    ];
-    const getters = {
-      N: () => N, phase: () => phase, rate: () => rate, twist: () => twist, drift: () => drift,
-      lineW: () => lineW, hue0: () => hue0, hueSpd: () => hueSpd, pulse: () => pulse,
-      ghost: () => ghost, fillAmt: () => fillAmt, flyAlt: () => flyAlt
-    };
-    const setters = {
-      N: v => { N = v; setSlider('count', Math.round(v), true); },
-      phase: v => { phase = v; setSlider('phase', v, true); },
-      rate: v => { rate = v; setSlider('rate', v, true); },
-      twist: v => { twist = v; setSlider('twist', v, true); },
-      drift: v => { drift = v; setSlider('drift', v, true); },
-      lineW: v => { lineW = v; setSlider('width', v, true); },
-      hue0: v => { hue0 = v; setSlider('hue', v, true); },
-      hueSpd: v => { hueSpd = v; setSlider('hueSpd', v, true); },
-      pulse: v => { pulse = v; setSlider('pulse', v, true); },
-      ghost: v => { ghost = v; setSlider('ghost', v, true); },
-      fillAmt: v => { fillAmt = v; setSlider('fillAmt', v, true); },
-      flyAlt: v => { flyAlt = v; setSlider('flyAlt', v, true); }
-    };
-    var flowTarget = {}, flowHold = 0;
     function rnd(a, b) { return a + Math.random() * (b - a); }
-    function pickCount() {
-      const roll = Math.random();
-      if (roll < 0.45) return Math.round(rnd(12, 64));
-      if (roll < 0.75) return Math.round(rnd(64, 180));
-      if (roll < 0.92) return Math.round(rnd(180, 320));
-      return Math.round(rnd(320, 512));
-    }
-    function pickFlowTarget(force) {
-      flowTarget = {
-        N: pickCount(), phase: rnd(0, 1), rate: rnd(0.25, 2.2), twist: rnd(0, 3.2),
-        drift: rnd(0, 0.9), lineW: rnd(0.6, 3.2), hue0: (hue0 + rnd(-80, 120) + 360) % 360,
-        hueSpd: rnd(0, 40), pulse: rnd(0, 0.7), ghost: rnd(0, 0.75),
-        fillAmt: rnd(0.02, 0.16), flyAlt: rnd(0.1, 0.8)
-      };
-      if (force || Math.random() < 0.35) {
-        const mood = Math.random();
-        if (mood < 0.5) {
-          setCheck('flyMode', false, true); setCheck('fillOn', Math.random() < 0.35, true);
-          setCheck('showDots', Math.random() < 0.55, true); setCheck('showEq', Math.random() < 0.45, true);
-          setCheck('glow', Math.random() < 0.85, true); setCheck('showNrm', false, true);
-        } else if (mood < 0.8) {
-          setCheck('flyMode', true, true); setCheck('flyVel', Math.random() < 0.6, true);
-          setCheck('showTrails', true, true); setCheck('fillOn', false, true);
-        } else {
-          setCheck('flyMode', false, true); setCheck('fillOn', true, true);
-          setCheck('showDots', false, true); setCheck('showEq', false, true); setCheck('glow', true, true);
-        }
-      }
-      flowHold = rnd(10, 22) / Math.max(0.2, flowSpd);
+    const FLOW_SLIDERS = [
+      { key:'N', min:1, max:108, int:true, get:()=>N, set:v=>setters.N(v) },
+      { key:'phase', min:0, max:1, get:()=>phase, set:v=>setters.phase(v) },
+      { key:'rate', min:0.05, max:4, get:()=>rate, set:v=>setters.rate(v) },
+      { key:'twist', min:0, max:4, get:()=>twist, set:v=>setters.twist(v) },
+      { key:'drift', min:0, max:2, get:()=>drift, set:v=>setters.drift(v) },
+      { key:'lineW', min:0.4, max:5, get:()=>lineW, set:v=>setters.lineW(v) },
+      { key:'hue0', min:0, max:360, get:()=>hue0, set:v=>setters.hue0(v) },
+      { key:'hueSpd', min:0, max:80, get:()=>hueSpd, set:v=>setters.hueSpd(v) },
+      { key:'pulse', min:0, max:1, get:()=>pulse, set:v=>setters.pulse(v) },
+      { key:'ghost', min:0, max:0.92, get:()=>ghost, set:v=>setters.ghost(v) },
+      { key:'fillAmt', min:0, max:0.35, get:()=>fillAmt, set:v=>setters.fillAmt(v) },
+      { key:'flyAlt', min:0, max:1.2, get:()=>flyAlt, set:v=>setters.flyAlt(v) }
+    ];
+    var flowKey = null, flowDir = 1, flowHold = 0;
+    function pickFlowSlider() {
+      const pool = FLOW_SLIDERS.filter(s => s.key !== flowKey);
+      const s = pool[Math.floor(Math.random() * pool.length)] || FLOW_SLIDERS[0];
+      flowKey = s.key;
+      flowDir = Math.random() < 0.5 ? -1 : 1;
+      flowHold = rnd(2.5, 20);
     }
     function tickFlow(dt) {
       if (!autoFlow || paused) return;
       flowHold -= dt;
-      if (flowHold <= 0) pickFlowTarget(false);
-      const speed = 0.08 * flowSpd;
-      for (const k of flowKeys) {
-        const cur = getters[k.key]();
-        let tgt = flowTarget[k.key];
-        if (tgt == null) continue;
-        let next;
-        if (k.key === 'hue0') {
-          let d = ((tgt - cur + 540) % 360) - 180;
-          next = ((cur + d * Math.min(1, speed * 1.2)) % 360 + 360) % 360;
-        } else {
-          next = cur + (tgt - cur) * Math.min(1, speed);
-          if (k.int) next = Math.round(next);
-        }
-        if (Math.abs(next - cur) > 1e-4) setters[k.key](next);
-      }
+      if (!flowKey || flowHold <= 0) pickFlowSlider();
+      const s = FLOW_SLIDERS.find(x => x.key === flowKey);
+      if (!s) return;
+      const span = Math.max(1e-6, s.max - s.min);
+      let next = s.get() + flowDir * span * (0.035 * flowSpd) * dt;
+      if (next >= s.max) { next = s.max; flowDir = -1; }
+      if (next <= s.min) { next = s.min; flowDir = 1; }
+      if (s.int) next = Math.round(next);
+      s.set(next);
     }
 
     let W, H, cx, cy, scale;
@@ -385,8 +375,19 @@
     }
     resize();
     addEventListener('resize', resize);
-    canvas.addEventListener('mousedown', e => { drag = true; lx = e.clientX; ly = e.clientY; });
-    addEventListener('mouseup', () => { drag = false; });
+    let tapInfo = null;
+    canvas.addEventListener('mousedown', e => {
+      drag = true; lx = e.clientX; ly = e.clientY;
+      tapInfo = { x: e.clientX, y: e.clientY, t: performance.now() };
+    });
+    addEventListener('mouseup', e => {
+      if (tapInfo && autoFlow) {
+        const dt = performance.now() - tapInfo.t;
+        const dist = Math.hypot(e.clientX - tapInfo.x, e.clientY - tapInfo.y);
+        if (dt < 280 && dist < 14) pickFlowSlider();
+      }
+      tapInfo = null; drag = false;
+    });
     addEventListener('mousemove', e => {
       if (!drag) return;
       rotY += (e.clientX - lx) * 0.008;
