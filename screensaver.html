@@ -107,7 +107,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.1.0 · tap Done or outside to close</div>
+    <div id="ver">v1.1.1 · tap Done or outside to close</div>
   </div>
   <div id="hint">Tap Controls to tweak · Done closes the panel<br>Use Reload if the phone shows an old version</div>
   <script>
@@ -118,7 +118,7 @@
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.1.0';
+    const APP_VER = '1.1.1';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -200,7 +200,7 @@
 
     // Deterministic fly path: integrate plane-normal on meridian 0, then rotate by longitude.
     // All circles are exact rotated copies → perfect chase sequence (no Euler drift).
-    let flyTable = [[0, 0]];
+    var flyTable = [[0, 0]];
     function rebuildFlyTable() {
       const n = 512;
       const tab = [[0, 0]];

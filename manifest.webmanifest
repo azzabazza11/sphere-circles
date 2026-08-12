@@ -1,7 +1,7 @@
 {
   "name": "Circle Sphere Screensaver",
   "short_name": "Circles",
-  "start_url": "./screensaver.html?v=1.1.0",
+  "start_url": "./screensaver.html?v=1.1.1",
   "display": "fullscreen",
   "orientation": "any",
   "background_color": "#05050c",
