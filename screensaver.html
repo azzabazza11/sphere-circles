@@ -7,6 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#05050c">
+  <meta http-equiv="Cache-Control" content="no-cache">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon.svg">
   <link rel="icon" href="icon.svg">
@@ -16,20 +17,36 @@
     html, body { width: 100%; height: 100%; overflow: hidden; background: #05050c; touch-action: none; }
     canvas { display: block; width: 100%; height: 100%; }
     #fab {
-      position: fixed; top: max(12px, env(safe-area-inset-top)); right: 12px; z-index: 5;
-      background: rgba(8,10,18,0.75); color: #c8ffe8; border: 1px solid rgba(68,255,170,0.4);
-      border-radius: 20px; padding: 8px 14px; font: 600 13px system-ui, sans-serif;
-      backdrop-filter: blur(8px); cursor: pointer;
+      position: fixed; top: max(12px, env(safe-area-inset-top)); right: 12px; z-index: 6;
+      background: rgba(8,10,18,0.85); color: #c8ffe8; border: 1px solid rgba(68,255,170,0.45);
+      border-radius: 22px; padding: 10px 16px; font: 600 14px system-ui, sans-serif;
+      backdrop-filter: blur(8px); cursor: pointer; -webkit-tap-highlight-color: transparent;
+      min-width: 96px; text-align: center;
     }
+    #scrim {
+      display: none; position: fixed; inset: 0; z-index: 4;
+      background: rgba(0,0,0,0.45);
+    }
+    #scrim.open { display: block; }
     #panel {
-      position: fixed; left: 10px; right: 10px; bottom: 10px; z-index: 4;
-      max-height: 48vh; overflow: auto;
-      background: rgba(8,10,18,0.88); border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 12px; padding: 10px 12px 14px;
+      position: fixed; left: 10px; right: 10px; bottom: max(10px, env(safe-area-inset-bottom));
+      z-index: 5; max-height: 52vh; overflow: auto;
+      background: rgba(8,10,18,0.94); border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 14px; padding: 10px 12px 12px;
       font-family: system-ui, sans-serif; color: #d0d6e0;
       display: none; backdrop-filter: blur(10px);
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
     }
     #panel.open { display: block; }
+    #panel .actions { display: flex; gap: 8px; margin-top: 10px; }
+    #panel .actions button {
+      flex: 1; border: 0; border-radius: 10px; padding: 12px 10px;
+      font: 650 14px system-ui, sans-serif; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #doneBtn { background: #44ffaa; color: #062218; }
+    #reloadBtn { background: rgba(255,255,255,0.1); color: #e8eef8; border: 1px solid rgba(255,255,255,0.15) !important; }
+    #ver { text-align: center; color: #667; font-size: 10px; margin-top: 8px; }
     #panel h2 {
       font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em;
       color: #7fd4ff; margin: 8px 0 4px;
@@ -52,6 +69,7 @@
 </head>
 <body>
   <canvas id="c"></canvas>
+  <div id="scrim"></div>
   <button id="fab" type="button">Controls</button>
   <div id="panel">
     <h2>Motion</h2>
@@ -85,8 +103,13 @@
     <label>Hue spd <input id="hueSpd" type="range" min="0" max="80" step="0.5" value="8"><span class="val" id="hueSpdVal">8.0</span></label>
     <label>Ghost <input id="ghost" type="range" min="0" max="0.92" step="0.01" value="0.18"><span class="val" id="ghostVal">0.18</span></label>
     <label>Pulse <input id="pulse" type="range" min="0" max="1" step="0.01" value="0.25"><span class="val" id="pulseVal">0.25</span></label>
+    <div class="actions">
+      <button id="doneBtn" type="button">Done</button>
+      <button id="reloadBtn" type="button">Reload</button>
+    </div>
+    <div id="ver">v1.1.0 · tap Done or outside to close</div>
   </div>
-  <div id="hint">Tap Controls to tweak · Auto-flow morphs the look<br>Tap canvas to keep screen awake</div>
+  <div id="hint">Tap Controls to tweak · Done closes the panel<br>Use Reload if the phone shows an old version</div>
   <script>
     const $ = (id) => document.getElementById(id);
     let N = 16, phase = 0.35, rate = 1, twist = 0, drift = 0;
@@ -95,22 +118,46 @@
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
+    const APP_VER = '1.1.0';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
+    const scrim = $('scrim');
     const fab = $('fab');
     const hint = $('hint');
     const R = 1, CYCLE = 6, MAX_N = 512, TRAIL_LEN = 70;
     const trails = Array.from({ length: MAX_N }, () => []);
     function clearTrails() { for (let i = 0; i < MAX_N; i++) trails[i].length = 0; }
 
+    function setPanel(open) {
+      panel.classList.toggle('open', open);
+      scrim.classList.toggle('open', open);
+      fab.textContent = open ? 'Hide' : 'Controls';
+    }
+    function closePanel() { setPanel(false); }
+    function togglePanel() { setPanel(!panel.classList.contains('open')); }
+
     fab.addEventListener('click', e => {
-      e.stopPropagation();
-      panel.classList.toggle('open');
-      fab.textContent = panel.classList.contains('open') ? 'Hide' : 'Controls';
-      hideHint(); keepAwake();
+      e.preventDefault(); e.stopPropagation();
+      togglePanel(); hideHint(); keepAwake();
     });
+    $('doneBtn').addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation(); closePanel();
+    });
+    $('reloadBtn').addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      const u = new URL(location.href);
+      u.searchParams.set('v', APP_VER);
+      u.searchParams.set('r', String(Date.now()));
+      location.replace(u.toString());
+    });
+    scrim.addEventListener('click', e => { e.preventDefault(); closePanel(); });
+    scrim.addEventListener('pointerdown', e => { e.preventDefault(); closePanel(); });
     panel.addEventListener('pointerdown', e => e.stopPropagation());
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./service-worker.js?v=' + APP_VER).catch(() => {});
+    }
 
     const bindRange = (id, valId, parse, fmt, apply) => {
       const el = $(id), out = $(valId);
@@ -216,7 +263,7 @@
     addEventListener('orientationchange', () => setTimeout(resize, 200));
 
     function onDown(x, y, id) {
-      if (panel.classList.contains('open')) return;
+      if (panel.classList.contains('open')) { closePanel(); return; }
       pointers.set(id, {x,y}); drag = true; lx = x; ly = y; hideHint(); keepAwake();
     }
     function onMove(x, y, id) {
