@@ -59,8 +59,26 @@
     #panel input[type="range"] { width: 100%; accent-color: #44ffaa; }
     #panel input[type="checkbox"] { width: 16px; height: 16px; accent-color: #44ffaa; justify-self: start; }
     #panel .val { color: #44ffaa; font-weight: 600; text-align: right; font-size: 11px; }
+
+    #quick {
+      position: fixed; left: 50%; transform: translateX(-50%);
+      bottom: max(16px, env(safe-area-inset-bottom));
+      z-index: 3; display: flex; gap: 10px;
+      pointer-events: auto;
+    }
+    #quick button {
+      min-width: 88px; padding: 12px 18px; border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(8,10,18,0.78); color: #c8d0dc;
+      font: 650 14px system-ui, sans-serif;
+      backdrop-filter: blur(8px);
+      -webkit-tap-highlight-color: transparent; cursor: pointer;
+    }
+    #quick button.on {
+      color: #062218; background: #44ffaa; border-color: #44ffaa;
+    }
     #hint {
-      position: fixed; left: 0; right: 0; bottom: 28px; text-align: center; color: #c8d0dc;
+      position: fixed; left: 0; right: 0; bottom: 78px; text-align: center; color: #c8d0dc;
       font-family: system-ui, sans-serif; font-size: 13px; text-shadow: 0 1px 8px #000;
       pointer-events: none; opacity: 1; transition: opacity 1.2s ease; padding: 0 20px;
     }
@@ -71,6 +89,10 @@
   <canvas id="c"></canvas>
   <div id="scrim"></div>
   <button id="fab" type="button">Controls</button>
+  <div id="quick">
+    <button type="button" id="quickFly">Fly</button>
+    <button type="button" id="quickFlow" class="on">Flow</button>
+  </div>
   <div id="panel">
     <h2>Motion</h2>
     <label>Circles <input id="count" type="range" min="1" max="108" step="1" value="16"><span class="val" id="countVal">16</span></label>
@@ -107,7 +129,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.2.1 · tap Done · pinch to zoom or outside to close</div>
+    <div id="ver">v1.2.2 · tap Done · pinch to zoom or outside to close</div>
   </div>
   <div id="hint">Tap Controls to tweak · Done closes the panel<br>Use Reload if the phone shows an old version</div>
   <script>
@@ -119,7 +141,7 @@
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.2.1';
+    const APP_VER = '1.2.2';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -156,6 +178,29 @@
     scrim.addEventListener('pointerdown', e => { e.preventDefault(); closePanel(); });
     panel.addEventListener('pointerdown', e => e.stopPropagation());
 
+    function syncQuick() {
+      const qf = $('quickFly'), qo = $('quickFlow');
+      if (qf) qf.classList.toggle('on', !!flyMode);
+      if (qo) qo.classList.toggle('on', !!autoFlow);
+    }
+    function toggleCheck(id, on) {
+      const el = $(id);
+      if (!el) return;
+      el.checked = on;
+      el.dispatchEvent(new Event('change'));
+      syncQuick();
+    }
+    $('quickFly').addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      toggleCheck('flyMode', !$('flyMode').checked);
+      hideHint(); keepAwake();
+    });
+    $('quickFlow').addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      toggleCheck('autoFlow', !$('autoFlow').checked);
+      hideHint(); keepAwake();
+    });
+
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./service-worker.js?v=' + APP_VER).catch(() => {});
     }
@@ -177,9 +222,9 @@
     bindRange('twist', 'twistVal', parseFloat, v => v.toFixed(2), v => twist = v);
     bindRange('drift', 'driftVal', parseFloat, v => v.toFixed(2), v => drift = v);
     bindRange('flowSpd', 'flowSpdVal', parseFloat, v => v.toFixed(2), v => flowSpd = v);
-    bindCheck('autoFlow', 'autoFlowVal', v => { autoFlow = v; if (v && controlsReady) pickFlowTarget(true); });
+    bindCheck('autoFlow', 'autoFlowVal', v => { autoFlow = v; if (v && controlsReady) pickFlowTarget(true); syncQuick(); });
     bindCheck('autoSpin', 'spinVal', v => autoSpin = v);
-    bindCheck('flyMode', 'flyModeVal', v => { flyMode = v; if (controlsReady) clearTrails(); });
+    bindCheck('flyMode', 'flyModeVal', v => { flyMode = v; if (controlsReady) clearTrails(); syncQuick(); });
     bindCheck('flyVel', 'flyVelVal', v => { flyVel = v; });
     bindCheck('flyIn', 'flyInVal', v => flyIn = v);
     bindCheck('showTrails', 'trailsVal', v => showTrails = v);
@@ -331,6 +376,7 @@
       flowHold = rnd(12,24)/Math.max(0.2, flowSpd);
     }
     controlsReady = true;
+    syncQuick();
     if (autoFlow) pickFlowTarget(true);
     function tickFlow(dt) {
       if (!autoFlow || paused) return;

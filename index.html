@@ -48,6 +48,19 @@
     }
     .presets button:hover { background: rgba(68,255,170,0.22); }
     #hint { color: #889; font-size: 10px; margin-top: 10px; line-height: 1.4; }
+    #quick {
+      position: fixed; left: 16px; bottom: 16px; z-index: 3;
+      display: flex; gap: 8px;
+    }
+    #quick button {
+      min-width: 72px; padding: 10px 14px; border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(8,10,18,0.78); color: #c8d0dc;
+      font: 650 13px system-ui, sans-serif; cursor: pointer;
+    }
+    #quick button.on {
+      color: #062218; background: #44ffaa; border-color: #44ffaa;
+    }
   </style>
 </head>
 <body>
@@ -99,6 +112,10 @@
     <label>Ghost <input id="ghost" type="range" min="0" max="0.92" step="0.01" value="0.18"><span class="val" id="ghostVal">0.18</span></label>
     <label>Fill amt <input id="fillAmt" type="range" min="0" max="0.35" step="0.005" value="0.06"><span class="val" id="fillAmtVal">0.06</span></label>
     <p id="hint">Fly paths are exact rotated copies (perfect sequence). Vel by R = faster when the circle is larger.</p>
+  </div>
+  <div id="quick">
+    <button type="button" id="quickFly">Fly</button>
+    <button type="button" id="quickFlow">Flow</button>
   </div>
   <canvas id="c"></canvas>
   <script>
@@ -182,8 +199,22 @@
     bindRange('drift', 'driftVal', parseFloat, v => v.toFixed(2), v => drift = v);
     bindRange('flowSpd', 'flowSpdVal', parseFloat, v => v.toFixed(2), v => flowSpd = v);
     bindCheck('pause', 'pauseVal', v => paused = v);
-    bindCheck('autoFlow', 'autoFlowVal', v => { autoFlow = v; if (v && controlsReady && !flowMuteUI) pickFlowTarget(true); });
-    bindCheck('flyMode', 'flyModeVal', v => { flyMode = v; if (!flowMuteUI) clearTrails(); });
+
+    function syncQuick() {
+      const qf = $('quickFly'), qo = $('quickFlow');
+      if (qf) qf.classList.toggle('on', !!flyMode);
+      if (qo) qo.classList.toggle('on', !!autoFlow);
+    }
+    function toggleCheck(id, on) {
+      const el = $(id); if (!el) return;
+      el.checked = !!on; el.dispatchEvent(new Event('change')); syncQuick();
+    }
+    if ($('quickFly')) {
+      $('quickFly').addEventListener('click', () => toggleCheck('flyMode', !$('flyMode').checked));
+      $('quickFlow').addEventListener('click', () => toggleCheck('autoFlow', !$('autoFlow').checked));
+    }
+    bindCheck('autoFlow', 'autoFlowVal', v => { autoFlow = v; if (v && controlsReady && !flowMuteUI) pickFlowTarget(true); syncQuick(); });
+    bindCheck('flyMode', 'flyModeVal', v => { flyMode = v; if (!flowMuteUI) clearTrails(); syncQuick(); });
     bindRange('flyAlt', 'flyAltVal', parseFloat, v => v.toFixed(2), v => flyAlt = v);
     bindCheck('flyVel', 'flyVelVal', v => { flyVel = v; });
     bindCheck('flyIn', 'flyInVal', v => flyIn = v);
@@ -532,10 +563,11 @@
       }
     }
     controlsReady = true;
+    syncQuick();
     frame(t0);
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./service-worker.js?v=1.1.4').catch(() => {});
+      navigator.serviceWorker.register('./service-worker.js?v=1.2.2').catch(() => {});
     }
   </script>
 </body>
