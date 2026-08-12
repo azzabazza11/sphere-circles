@@ -67,7 +67,7 @@
     </div>
 
     <h2>Motion</h2>
-    <label>Circles <input id="count" type="range" min="1" max="512" step="1" value="16"><span class="val" id="countVal">16</span></label>
+    <label>Circles <input id="count" type="range" min="1" max="108" step="1" value="16"><span class="val" id="countVal">16</span></label>
     <label>Phase <input id="phase" type="range" min="0" max="1" step="0.001" value="0.35"><span class="val" id="phaseVal">0.35</span></label>
     <label>Rate <input id="rate" type="range" min="0.05" max="4" step="0.01" value="1"><span class="val" id="rateVal">1.00×</span></label>
     <label>Twist <input id="twist" type="range" min="0" max="4" step="0.01" value="0"><span class="val" id="twistVal">0.00</span></label>
@@ -78,7 +78,7 @@
 
     <h2>Fly</h2>
     <label>Fly <input id="flyMode" type="checkbox"><span class="val" id="flyModeVal">off</span></label>
-    <label>Fly spd <input id="flyAmt" type="range" min="0" max="3" step="0.01" value="0.55"><span class="val" id="flyAmtVal">0.55</span></label>
+    <label>Altitude <input id="flyAlt" type="range" min="0" max="1.2" step="0.01" value="0.35"><span class="val" id="flyAltVal">0.35</span></label>
     <label>Vel by R <input id="flyVel" type="checkbox"><span class="val" id="flyVelVal">off</span></label>
     <label>Inward <input id="flyIn" type="checkbox"><span class="val" id="flyInVal">off</span></label>
     <label>Trails <input id="showTrails" type="checkbox" checked><span class="val" id="trailsVal">on</span></label>
@@ -106,7 +106,7 @@
     const ctx = canvas.getContext('2d');
     const R = 1;
     const CYCLE = 6;
-    const MAX_N = 512;
+    const MAX_N = 108;
     const TRAIL_LEN = 70;
 
     const $ = (id) => document.getElementById(id);
@@ -122,7 +122,7 @@
     };
 
     let N = 16, phase = 0.35, rate = 1, twist = 0, drift = 0, paused = false;
-    let flyMode = false, flyAmt = 0.55, flyIn = false, flyVel = false, showTrails = true;
+    let flyMode = false, flyAlt = 0.35, flyIn = false, flyVel = false, showTrails = true;
     let flyBlend = 0;
     let showSphere = false, showEq = true, showDots = true, showNrm = false;
     let glow = true, fillOn = false, starsOn = true, autoSpin = true;
@@ -142,55 +142,24 @@
     }
 
 
-    // Deterministic fly path: integrate plane-normal on meridian 0, then rotate by longitude.
-    // All circles are exact rotated copies → perfect chase sequence (no Euler drift).
-    var flyTable = [[0, 0]];
-    function rebuildFlyTable() {
-      const n = 512;
-      const tab = [[0, 0]];
-      let x = 0, y = 0;
-      for (let i = 1; i <= n; i++) {
-        const t0 = (i - 1) / n;
-        const t1 = i / n;
-        const st = animState(t0);
-        const nx = Math.cos(st.beta), ny = Math.sin(st.beta);
-        let w = 1;
-        if (flyVel) w = 0.18 + 0.82 * Math.sin(st.rho); // slow when tiny, fast when open
-        const ds = (t1 - t0) * CYCLE;
-        x += nx * w * ds;
-        y += ny * w * ds;
-        tab.push([x, y]);
+
+    // Altitude-capped fly: lift along plane normal, optional inward toward origin.
+    // Vel by R scales how high for the current circle size (no unbounded speed path).
+    const FLY_ALT_MAX = 1.2;
+    function flyOffset(rho, n) {
+      if (flyBlend < 1e-4 || flyAlt <= 1e-6) return [0, 0, 0];
+      const env = flyVel ? (0.18 + 0.82 * Math.sin(rho)) : 1;
+      let lift = Math.min(FLY_ALT_MAX, Math.max(0, flyAlt)) * flyBlend * env;
+      if (flyIn) {
+        // pull center toward origin along -n, never past the origin
+        const along = Math.max(0, R * Math.cos(rho));
+        lift = Math.min(lift, along * 0.98);
+        return [-n[0] * lift, -n[1] * lift, -n[2] * lift];
       }
-      flyTable = tab;
-    }
-    function sampleFlyLocal(t) {
-      // t grows without bound; path is periodic in shape, cumulative per cycle
-      if (t <= 0) return [0, 0, 0];
-      const n = flyTable.length - 1;
-      const cycles = Math.floor(t);
-      const f = t - cycles;
-      const end = flyTable[n];
-      const idx = f * n;
-      const i0 = Math.floor(idx);
-      const i1 = Math.min(n, i0 + 1);
-      const u = idx - i0;
-      const a = flyTable[i0], b = flyTable[i1];
-      const lx = a[0] + (b[0] - a[0]) * u;
-      const ly = a[1] + (b[1] - a[1]) * u;
-      return [end[0] * cycles + lx, end[1] * cycles + ly, 0];
-    }
-    function rotateY(v, lon) {
-      const c = Math.cos(lon), s = Math.sin(lon);
-      return [v[0] * c, v[1], -v[0] * s];
-    }
-    function flyOffset(t, lon) {
-      if (flyBlend < 1e-4) return [0, 0, 0];
-      const local = sampleFlyLocal(t);
-      const s = flyAmt * (flyIn ? -1 : 1) * flyBlend;
-      return rotateY([local[0] * s, local[1] * s, 0], lon);
+      return [n[0] * lift, n[1] * lift, n[2] * lift];
     }
 
-    rebuildFlyTable();
+
 
     function setSlider(id, value, silent) {
       const el = $(id); el.value = value;
@@ -215,8 +184,8 @@
     bindCheck('pause', 'pauseVal', v => paused = v);
     bindCheck('autoFlow', 'autoFlowVal', v => { autoFlow = v; if (v && controlsReady && !flowMuteUI) pickFlowTarget(true); });
     bindCheck('flyMode', 'flyModeVal', v => { flyMode = v; if (!flowMuteUI) clearTrails(); });
-    bindRange('flyAmt', 'flyAmtVal', parseFloat, v => v.toFixed(2), v => flyAmt = v);
-    bindCheck('flyVel', 'flyVelVal', v => { flyVel = v; if (controlsReady) { rebuildFlyTable(); clearTrails(); } });
+    bindRange('flyAlt', 'flyAltVal', parseFloat, v => v.toFixed(2), v => flyAlt = v);
+    bindCheck('flyVel', 'flyVelVal', v => { flyVel = v; });
     bindCheck('flyIn', 'flyInVal', v => flyIn = v);
     bindCheck('showTrails', 'trailsVal', v => showTrails = v);
     bindCheck('showSphere', 'sphereVal', v => showSphere = v);
@@ -255,7 +224,7 @@
       launch: () => {
         setSlider('count', 32); setSlider('phase', 0.45); setSlider('rate', 1.0);
         setSlider('twist', 0); setSlider('drift', 0); setCheck('flyMode', true); setCheck('flyVel', true);
-        setSlider('flyAmt', 0.65); setCheck('flyIn', false); setCheck('showTrails', true);
+        setSlider('flyAlt', 0.35); setCheck('flyIn', false); setCheck('showTrails', true);
         setCheck('showSphere', false); setCheck('showEq', true); setCheck('glow', true);
         setCheck('fillOn', false); setCheck('showDots', true); setCheck('showNrm', false);
         setSlider('width', 1.8); setSlider('hueSpd', 10); setSlider('pulse', 0.25);
@@ -279,7 +248,7 @@
         setSlider('ghost', 0); setSlider('hue', 0); setCheck('autoFlow', false);
       },
       dense: () => {
-        setSlider('count', 256); setSlider('phase', 0.42); setSlider('rate', 0.55);
+        setSlider('count', 108); setSlider('phase', 0.42); setSlider('rate', 0.55);
         setSlider('twist', 0.4); setSlider('drift', 0.08); setCheck('flyMode', false);
         setCheck('showSphere', false); setCheck('showEq', false); setCheck('glow', true);
         setCheck('fillOn', false); setCheck('showDots', false); setCheck('showNrm', false);
@@ -302,12 +271,12 @@
       { id: 'count', key: 'N', int: true }, { id: 'phase', key: 'phase' }, { id: 'rate', key: 'rate' },
       { id: 'twist', key: 'twist' }, { id: 'drift', key: 'drift' }, { id: 'width', key: 'lineW' },
       { id: 'hue', key: 'hue0' }, { id: 'hueSpd', key: 'hueSpd' }, { id: 'pulse', key: 'pulse' },
-      { id: 'ghost', key: 'ghost' }, { id: 'fillAmt', key: 'fillAmt' }, { id: 'flyAmt', key: 'flyAmt' }
+      { id: 'ghost', key: 'ghost' }, { id: 'fillAmt', key: 'fillAmt' }, { id: 'flyAlt', key: 'flyAlt' }
     ];
     const getters = {
       N: () => N, phase: () => phase, rate: () => rate, twist: () => twist, drift: () => drift,
       lineW: () => lineW, hue0: () => hue0, hueSpd: () => hueSpd, pulse: () => pulse,
-      ghost: () => ghost, fillAmt: () => fillAmt, flyAmt: () => flyAmt
+      ghost: () => ghost, fillAmt: () => fillAmt, flyAlt: () => flyAlt
     };
     const setters = {
       N: v => { N = v; setSlider('count', Math.round(v), true); },
@@ -321,7 +290,7 @@
       pulse: v => { pulse = v; setSlider('pulse', v, true); },
       ghost: v => { ghost = v; setSlider('ghost', v, true); },
       fillAmt: v => { fillAmt = v; setSlider('fillAmt', v, true); },
-      flyAmt: v => { flyAmt = v; setSlider('flyAmt', v, true); }
+      flyAmt: v => { flyAmt = v; setSlider('flyAlt', v, true); }
     };
     var flowTarget = {}, flowHold = 0;
     function rnd(a, b) { return a + Math.random() * (b - a); }
@@ -337,7 +306,7 @@
         N: pickCount(), phase: rnd(0, 1), rate: rnd(0.25, 2.2), twist: rnd(0, 3.2),
         drift: rnd(0, 0.9), lineW: rnd(0.6, 3.2), hue0: (hue0 + rnd(-80, 120) + 360) % 360,
         hueSpd: rnd(0, 40), pulse: rnd(0, 0.7), ghost: rnd(0, 0.75),
-        fillAmt: rnd(0.02, 0.16), flyAmt: rnd(0.15, 1.4)
+        fillAmt: rnd(0.02, 0.16), flyAlt: rnd(0.1, 0.8)
       };
       if (force || Math.random() < 0.35) {
         const mood = Math.random();
@@ -521,7 +490,7 @@
         const lon = (2 * Math.PI * k) / N + simTime * drift + twist * beta;
         const cl = Math.cos(lon), sl = Math.sin(lon);
         const n = [Math.cos(beta)*cl, Math.sin(beta), Math.cos(beta)*sl];
-        const off = flyOffset(tk, lon);
+        const off = flyOffset(rho, n);
         const surfCenter = [R*Math.cos(rho)*n[0], R*Math.cos(rho)*n[1], R*Math.cos(rho)*n[2]];
         const center = add(surfCenter, off);
         items.push({ k, rho, n, off, center, T: [R*cl, 0, R*sl], cz: rot(center)[2], tk });

@@ -73,7 +73,7 @@
   <button id="fab" type="button">Controls</button>
   <div id="panel">
     <h2>Motion</h2>
-    <label>Circles <input id="count" type="range" min="1" max="512" step="1" value="16"><span class="val" id="countVal">16</span></label>
+    <label>Circles <input id="count" type="range" min="1" max="108" step="1" value="16"><span class="val" id="countVal">16</span></label>
     <label>Phase <input id="phase" type="range" min="0" max="1" step="0.001" value="0.35"><span class="val" id="phaseVal">0.35</span></label>
     <label>Rate <input id="rate" type="range" min="0.05" max="4" step="0.01" value="1"><span class="val" id="rateVal">1.00×</span></label>
     <label>Twist <input id="twist" type="range" min="0" max="4" step="0.01" value="0"><span class="val" id="twistVal">0.00</span></label>
@@ -90,7 +90,7 @@
       <label>Inward <input id="flyIn" type="checkbox"><span class="val" id="flyInVal">off</span></label>
       <label>Trails <input id="showTrails" type="checkbox" checked><span class="val" id="trailsVal">on</span></label>
     </div>
-    <label>Fly spd <input id="flyAmt" type="range" min="0" max="3" step="0.01" value="0.55"><span class="val" id="flyAmtVal">0.55</span></label>
+    <label>Altitude <input id="flyAlt" type="range" min="0" max="1.2" step="0.01" value="0.35"><span class="val" id="flyAltVal">0.35</span></label>
     <h2>Look</h2>
     <div class="row">
       <label>Glow <input id="glow" type="checkbox" checked><span class="val" id="glowVal">on</span></label>
@@ -107,26 +107,26 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.1.4 · tap Done · pinch to zoom or outside to close</div>
+    <div id="ver">v1.2.1 · tap Done · pinch to zoom or outside to close</div>
   </div>
   <div id="hint">Tap Controls to tweak · Done closes the panel<br>Use Reload if the phone shows an old version</div>
   <script>
     const $ = (id) => document.getElementById(id);
     let N = 16, phase = 0.35, rate = 1, twist = 0, drift = 0;
-    let flyMode = false, flyAmt = 0.55, flyIn = false, flyVel = false, showTrails = true;
+    let flyMode = false, flyAlt = 0.35, flyIn = false, flyVel = false, showTrails = true;
     let flyBlend = 0; // 0 = on sphere, 1 = full fly (smooth settle)
     let showEq = true, showDots = true, glow = true, fillOn = false, starsOn = true, autoSpin = true;
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.1.4';
+    const APP_VER = '1.2.1';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
     const scrim = $('scrim');
     const fab = $('fab');
     const hint = $('hint');
-    const R = 1, CYCLE = 6, MAX_N = 512, TRAIL_LEN = 70;
+    const R = 1, CYCLE = 6, MAX_N = 108, TRAIL_LEN = 70;
     const trails = Array.from({ length: MAX_N }, () => []);
     function clearTrails() { for (let i = 0; i < MAX_N; i++) trails[i].length = 0; }
 
@@ -180,10 +180,10 @@
     bindCheck('autoFlow', 'autoFlowVal', v => { autoFlow = v; if (v && controlsReady) pickFlowTarget(true); });
     bindCheck('autoSpin', 'spinVal', v => autoSpin = v);
     bindCheck('flyMode', 'flyModeVal', v => { flyMode = v; if (controlsReady) clearTrails(); });
-    bindCheck('flyVel', 'flyVelVal', v => { flyVel = v; if (controlsReady) { rebuildFlyTable(); clearTrails(); } });
+    bindCheck('flyVel', 'flyVelVal', v => { flyVel = v; });
     bindCheck('flyIn', 'flyInVal', v => flyIn = v);
     bindCheck('showTrails', 'trailsVal', v => showTrails = v);
-    bindRange('flyAmt', 'flyAmtVal', parseFloat, v => v.toFixed(2), v => flyAmt = v);
+    bindRange('flyAlt', 'flyAltVal', parseFloat, v => v.toFixed(2), v => flyAlt = v);
     bindCheck('glow', 'glowVal', v => glow = v);
     bindCheck('starsOn', 'starsVal', v => starsOn = v);
     bindCheck('showEq', 'eqVal', v => showEq = v);
@@ -200,55 +200,24 @@
       return { rho: (Math.PI/2)*Math.abs(signed), beta: (Math.PI/2)*signed };
     }
 
-    // Deterministic fly path: integrate plane-normal on meridian 0, then rotate by longitude.
-    // All circles are exact rotated copies → perfect chase sequence (no Euler drift).
-    var flyTable = [[0, 0]];
-    function rebuildFlyTable() {
-      const n = 512;
-      const tab = [[0, 0]];
-      let x = 0, y = 0;
-      for (let i = 1; i <= n; i++) {
-        const t0 = (i - 1) / n;
-        const t1 = i / n;
-        const st = animState(t0);
-        const nx = Math.cos(st.beta), ny = Math.sin(st.beta);
-        let w = 1;
-        if (flyVel) w = 0.18 + 0.82 * Math.sin(st.rho); // slow when tiny, fast when open
-        const ds = (t1 - t0) * CYCLE;
-        x += nx * w * ds;
-        y += ny * w * ds;
-        tab.push([x, y]);
+
+    // Altitude-capped fly: lift along plane normal, optional inward toward origin.
+    // Vel by R scales how high for the current circle size (no unbounded speed path).
+    const FLY_ALT_MAX = 1.2;
+    function flyOffset(rho, n) {
+      if (flyBlend < 1e-4 || flyAlt <= 1e-6) return [0, 0, 0];
+      const env = flyVel ? (0.18 + 0.82 * Math.sin(rho)) : 1;
+      let lift = Math.min(FLY_ALT_MAX, Math.max(0, flyAlt)) * flyBlend * env;
+      if (flyIn) {
+        // pull center toward origin along -n, never past the origin
+        const along = Math.max(0, R * Math.cos(rho));
+        lift = Math.min(lift, along * 0.98);
+        return [-n[0] * lift, -n[1] * lift, -n[2] * lift];
       }
-      flyTable = tab;
-    }
-    function sampleFlyLocal(t) {
-      // t grows without bound; path is periodic in shape, cumulative per cycle
-      if (t <= 0) return [0, 0, 0];
-      const n = flyTable.length - 1;
-      const cycles = Math.floor(t);
-      const f = t - cycles;
-      const end = flyTable[n];
-      const idx = f * n;
-      const i0 = Math.floor(idx);
-      const i1 = Math.min(n, i0 + 1);
-      const u = idx - i0;
-      const a = flyTable[i0], b = flyTable[i1];
-      const lx = a[0] + (b[0] - a[0]) * u;
-      const ly = a[1] + (b[1] - a[1]) * u;
-      return [end[0] * cycles + lx, end[1] * cycles + ly, 0];
-    }
-    function rotateY(v, lon) {
-      const c = Math.cos(lon), s = Math.sin(lon);
-      return [v[0] * c, v[1], -v[0] * s];
-    }
-    function flyOffset(t, lon) {
-      if (flyBlend < 1e-4) return [0, 0, 0];
-      const local = sampleFlyLocal(t);
-      const s = flyAmt * (flyIn ? -1 : 1) * flyBlend;
-      return rotateY([local[0] * s, local[1] * s, 0], lon);
+      return [n[0] * lift, n[1] * lift, n[2] * lift];
     }
 
-    rebuildFlyTable();
+
 
     let W, H, cx, cy, scale, dpr;
     let rotY = 0.7, rotX = 0.32, zoom = 280;
@@ -361,7 +330,6 @@
       }
       flowHold = rnd(12,24)/Math.max(0.2, flowSpd);
     }
-    rebuildFlyTable();
     controlsReady = true;
     if (autoFlow) pickFlowTarget(true);
     function tickFlow(dt) {
@@ -378,7 +346,7 @@
         ['hueSpd', () => hueSpd, v => { hueSpd=v; setSliderSilent('hueSpd', v); }],
         ['pulse', () => pulse, v => { pulse=v; setSliderSilent('pulse', v); }],
         ['ghost', () => ghost, v => { ghost=v; setSliderSilent('ghost', v); }],
-        ['flyAmt', () => flyAmt, v => { flyAmt=v; setSliderSilent('flyAmt', v); }]
+        ['flyAlt', () => flyAlt, v => { flyAlt=v; setSliderSilent('flyAlt', v); }]
       ];
       for (const [k, get, set] of pairs) {
         const cur = get(), tgt = flowTarget[k];
@@ -469,7 +437,7 @@
         const lon = (2*Math.PI*k)/N + simTime*drift + twist*beta;
         const cl = Math.cos(lon), sl = Math.sin(lon);
         const n = [Math.cos(beta)*cl, Math.sin(beta), Math.cos(beta)*sl];
-        const off = flyOffset(tk, lon);
+        const off = flyOffset(rho, n);
         const center = add([R*Math.cos(rho)*n[0], R*Math.cos(rho)*n[1], R*Math.cos(rho)*n[2]], off);
         items.push({ k, rho, n, off, center, T:[R*cl,0,R*sl], cz: rot(center)[2] });
       }
