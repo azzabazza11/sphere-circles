@@ -56,8 +56,24 @@
       border-radius: 50%; background: #44ffaa; border: 2px solid #0a1a14;
     }
     #panel .val { color: #44ffaa; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; font-size: 11px; }
-    #panel input[type="checkbox"] {
-      width: 20px; height: 20px; accent-color: #44ffaa; cursor: pointer; justify-self: start;
+
+    .togs { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 10px; }
+    .tog {
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.05);
+      color: #8a93a3;
+      border-radius: 999px;
+      padding: 10px 14px;
+      font: 650 12px system-ui, sans-serif;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background .15s ease, color .15s ease, border-color .15s ease, box-shadow .15s ease;
+    }
+    .tog.on {
+      color: #062218;
+      background: #44ffaa;
+      border-color: #6dffc0;
+      box-shadow: 0 0 0 1px rgba(68,255,170,0.25), 0 0 16px rgba(68,255,170,0.28);
     }
     .presets button:hover { background: rgba(68,255,170,0.22); }
 
@@ -128,32 +144,38 @@
         <label>Rate <input id="rate" type="range" min="0.05" max="4" step="0.01" value="1"><span class="val" id="rateVal">1.00×</span></label>
         <label>Twist <input id="twist" type="range" min="0" max="4" step="0.01" value="0"><span class="val" id="twistVal">0.00</span></label>
         <label>Drift <input id="drift" type="range" min="0" max="2" step="0.01" value="0"><span class="val" id="driftVal">0.00</span></label>
-        <label>Auto flow <input id="autoFlow" type="checkbox"><span class="val" id="autoFlowVal">off</span></label>
+        <div class="togs">
+          <button type="button" class="tog" id="autoFlow" aria-pressed="false">Auto flow</button>
+          <button type="button" class="tog" id="pause" aria-pressed="false">Pause</button>
+        </div>
         <label>Flow spd <input id="flowSpd" type="range" min="0.15" max="2" step="0.01" value="0.55"><span class="val" id="flowSpdVal">0.55</span></label>
-        <label>Pause <input id="pause" type="checkbox"><span class="val" id="pauseVal">off</span></label>
       </div>
     </div>
     <div class="acc" data-acc>
       <button type="button" class="acc-h">Fly</button>
       <div class="acc-b">
-        <label>Fly <input id="flyMode" type="checkbox"><span class="val" id="flyModeVal">off</span></label>
+        <div class="togs">
+          <button type="button" class="tog" id="flyMode" aria-pressed="false">Fly</button>
+          <button type="button" class="tog" id="flyVel" aria-pressed="false">Vel by R</button>
+          <button type="button" class="tog" id="flyIn" aria-pressed="false">Inward</button>
+          <button type="button" class="tog on" id="showTrails" aria-pressed="true">Trails</button>
+        </div>
         <label>Fly spd <input id="flyAlt" type="range" min="0" max="2" step="0.01" value="0.55"><span class="val" id="flyAltVal">0.55</span></label>
-        <label>Vel by R <input id="flyVel" type="checkbox"><span class="val" id="flyVelVal">off</span></label>
-        <label>Inward <input id="flyIn" type="checkbox"><span class="val" id="flyInVal">off</span></label>
-        <label>Trails <input id="showTrails" type="checkbox" checked><span class="val" id="trailsVal">on</span></label>
       </div>
     </div>
     <div class="acc" data-acc>
       <button type="button" class="acc-h">Look</button>
       <div class="acc-b">
-        <label>Sphere <input id="showSphere" type="checkbox"><span class="val" id="sphereVal">off</span></label>
-        <label>Equator <input id="showEq" type="checkbox" checked><span class="val" id="eqVal">on</span></label>
-        <label>Dots <input id="showDots" type="checkbox" checked><span class="val" id="dotsVal">on</span></label>
-        <label>Normals <input id="showNrm" type="checkbox"><span class="val" id="nrmVal">off</span></label>
-        <label>Glow <input id="glow" type="checkbox" checked><span class="val" id="glowVal">on</span></label>
-        <label>Fill <input id="fillOn" type="checkbox"><span class="val" id="fillVal">off</span></label>
-        <label>Stars <input id="starsOn" type="checkbox" checked><span class="val" id="starsVal">on</span></label>
-        <label>Orbit <input id="autoSpin" type="checkbox" checked><span class="val" id="spinVal">on</span></label>
+        <div class="togs">
+          <button type="button" class="tog" id="showSphere" aria-pressed="false">Sphere</button>
+          <button type="button" class="tog on" id="showEq" aria-pressed="true">Equator</button>
+          <button type="button" class="tog on" id="showDots" aria-pressed="true">Dots</button>
+          <button type="button" class="tog" id="showNrm" aria-pressed="false">Normals</button>
+          <button type="button" class="tog on" id="glow" aria-pressed="true">Glow</button>
+          <button type="button" class="tog" id="fillOn" aria-pressed="false">Fill</button>
+          <button type="button" class="tog on" id="starsOn" aria-pressed="true">Stars</button>
+          <button type="button" class="tog on" id="autoSpin" aria-pressed="true">Orbit</button>
+        </div>
         <label>Width <input id="width" type="range" min="0.4" max="5" step="0.05" value="1.6"><span class="val" id="widthVal">1.60</span></label>
         <label>Hue <input id="hue" type="range" min="0" max="360" step="1" value="0"><span class="val" id="hueVal">0</span></label>
         <label>Hue spd <input id="hueSpd" type="range" min="0" max="80" step="0.5" value="8"><span class="val" id="hueSpdVal">8.0</span></label>
@@ -198,9 +220,22 @@
       const go = () => { const v = parse(el.value); out.textContent = fmt(v); apply(v); };
       el.addEventListener('input', go); go(); return el;
     };
-    const bindCheck = (id, valId, apply) => {
-      const el = $(id), out = $(valId);
-      const go = () => { apply(el.checked); out.textContent = el.checked ? 'on' : 'off'; };
+
+    function isOn(el) { return !!(el && el.classList.contains('on')); }
+    function setOn(el, on) {
+      if (!el) return;
+      el.classList.toggle('on', !!on);
+      el.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+
+    const bindCheck = (id, apply) => {
+      const el = $(id); if (!el) return el;
+      const go = () => apply(isOn(el));
+      el.addEventListener('click', e => {
+        e.preventDefault();
+        setOn(el, !isOn(el));
+        el.dispatchEvent(new Event('change'));
+      });
       el.addEventListener('change', go); go(); return el;
     };
 
@@ -286,7 +321,7 @@
       flowMuteUI = false;
     }
     function setCheck(id, on, silent) {
-      const el = $(id); el.checked = on;
+      const el = $(id); setOn(el, on);
       flowMuteUI = !!silent;
       el.dispatchEvent(new Event('change'));
       flowMuteUI = false;
@@ -298,7 +333,7 @@
     bindRange('twist', 'twistVal', parseFloat, v => v.toFixed(2), v => twist = v);
     bindRange('drift', 'driftVal', parseFloat, v => v.toFixed(2), v => drift = v);
     bindRange('flowSpd', 'flowSpdVal', parseFloat, v => v.toFixed(2), v => flowSpd = v);
-    bindCheck('pause', 'pauseVal', v => paused = v);
+    bindCheck('pause', v => paused = v);
 
     function syncQuick() {
       const qf = $('quickFly'), qo = $('quickFlow');
@@ -307,26 +342,26 @@
     }
     function toggleCheck(id, on) {
       const el = $(id); if (!el) return;
-      el.checked = !!on; el.dispatchEvent(new Event('change')); syncQuick();
+      setOn(el, !!on); el.dispatchEvent(new Event('change')); syncQuick();
     }
     if ($('quickFly')) {
-      $('quickFly').addEventListener('click', () => toggleCheck('flyMode', !$('flyMode').checked));
-      $('quickFlow').addEventListener('click', () => toggleCheck('autoFlow', !$('autoFlow').checked));
+      $('quickFly').addEventListener('click', () => toggleCheck('flyMode', !isOn($('flyMode'))));
+      $('quickFlow').addEventListener('click', () => toggleCheck('autoFlow', !isOn($('autoFlow'))));
     }
-    bindCheck('autoFlow', 'autoFlowVal', v => { autoFlow = v; if (v && controlsReady && !flowMuteUI) pickFlowSlider(); syncQuick(); });
-    bindCheck('flyMode', 'flyModeVal', v => { flyMode = v; if (!flowMuteUI) clearTrails(); syncQuick(); });
+    bindCheck('autoFlow', v => { autoFlow = v; if (v && controlsReady && !flowMuteUI) pickFlowSlider(); syncQuick(); });
+    bindCheck('flyMode', v => { flyMode = v; if (!flowMuteUI) clearTrails(); syncQuick(); });
     bindRange('flyAlt', 'flyAltVal', parseFloat, v => v.toFixed(2), v => flyAlt = v);
-    bindCheck('flyVel', 'flyVelVal', v => { flyVel = v; if (controlsReady) { rebuildFlyTable(); clearTrails(); } });
-    bindCheck('flyIn', 'flyInVal', v => flyIn = v);
-    bindCheck('showTrails', 'trailsVal', v => showTrails = v);
-    bindCheck('showSphere', 'sphereVal', v => showSphere = v);
-    bindCheck('showEq', 'eqVal', v => showEq = v);
-    bindCheck('showDots', 'dotsVal', v => showDots = v);
-    bindCheck('showNrm', 'nrmVal', v => showNrm = v);
-    bindCheck('glow', 'glowVal', v => glow = v);
-    bindCheck('fillOn', 'fillVal', v => fillOn = v);
-    bindCheck('starsOn', 'starsVal', v => starsOn = v);
-    bindCheck('autoSpin', 'spinVal', v => autoSpin = v);
+    bindCheck('flyVel', v => { flyVel = v; if (controlsReady) { rebuildFlyTable(); clearTrails(); } });
+    bindCheck('flyIn', v => flyIn = v);
+    bindCheck('showTrails', v => showTrails = v);
+    bindCheck('showSphere', v => showSphere = v);
+    bindCheck('showEq', v => showEq = v);
+    bindCheck('showDots', v => showDots = v);
+    bindCheck('showNrm', v => showNrm = v);
+    bindCheck('glow', v => glow = v);
+    bindCheck('fillOn', v => fillOn = v);
+    bindCheck('starsOn', v => starsOn = v);
+    bindCheck('autoSpin', v => autoSpin = v);
     bindRange('width', 'widthVal', parseFloat, v => v.toFixed(2), v => lineW = v);
     bindRange('hue', 'hueVal', parseFloat, v => String(Math.round(v)), v => hue0 = v);
     bindRange('hueSpd', 'hueSpdVal', parseFloat, v => v.toFixed(1), v => hueSpd = v);
@@ -401,7 +436,7 @@
     addEventListener('keydown', e => {
       if (e.code === 'Space' && e.target.tagName !== 'INPUT') {
         e.preventDefault();
-        $('pause').checked = !$('pause').checked;
+        setOn($('pause'), !isOn($('pause')));
         $('pause').dispatchEvent(new Event('change'));
       }
     });
@@ -644,7 +679,7 @@
     syncQuick();
     frame(t0);
 
-    const APP_VER = '1.3.3';
+    const APP_VER = '1.3.4';
     function shareUrl() {
       try {
         const u = new URL(location.href);
