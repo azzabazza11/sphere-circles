@@ -4,6 +4,7 @@ Animated tangential circles on a sphere — desktop playground + phone screensav
 
 ## Live
 
+- **All apps hub:** https://azzabazza11.github.io/
 - Desktop: https://azzabazza11.github.io/sphere-circles/
 - Screensaver: https://azzabazza11.github.io/sphere-circles/screensaver.html?v=1.3.9
 
