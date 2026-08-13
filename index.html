@@ -224,6 +224,7 @@
           <button type="button" class="tog on" id="glow" aria-pressed="true">Glow</button>
           <button type="button" class="tog" id="fillOn" aria-pressed="false">Fill</button>
           <button type="button" class="tog on" id="starsOn" aria-pressed="true">Stars</button>
+          <button type="button" class="tog" id="pondOn" aria-pressed="false">Pond</button>
           <button type="button" class="tog on" id="autoSpin" aria-pressed="true">Orbit</button>
         </div>
         <label>Width <input id="width" type="range" min="0.4" max="5" step="0.05" value="1.6"><span class="val" id="widthVal">1.60</span></label>
@@ -298,7 +299,7 @@
     let flyMode = false, flyAlt = 1.25, flyIn = false, flyVel = false, flyMirror = false, showTrails = true;
     let flyBlend = 0;
     let showSphere = false, showEq = true, showDots = true, showNrm = false;
-    let glow = true, fillOn = false, starsOn = true, autoSpin = true;
+    let glow = true, fillOn = false, starsOn = true, pondOn = false, autoSpin = true;
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = false, flowSpd = 0.55, flowMuteUI = false;
     let controlsReady = false;
@@ -441,6 +442,7 @@
     bindCheck('glow', v => glow = v);
     bindCheck('fillOn', v => fillOn = v);
     bindCheck('starsOn', v => starsOn = v);
+    bindCheck('pondOn', v => pondOn = v);
     bindCheck('autoSpin', v => autoSpin = v);
     bindRange('width', 'widthVal', parseFloat, v => v.toFixed(2), v => lineW = v);
     bindRange('hue', 'hueVal', parseFloat, v => String(Math.round(v)), v => hue0 = v);
@@ -808,13 +810,40 @@
           strokePts([proj(center), proj([center[0]+n[0]*arrowLen, center[1]+n[1]*arrowLen, center[2]+n[2]*arrowLen])], 'rgba(255,255,255,0.28)', 1.1);
         }
       }
+      if (pondOn) drawPondReflect();
+    }
+    function drawPondReflect() {
+      const pondH = H * 0.2;
+      if (pondH < 8 || W < 8) return;
+      const y0 = H - pondH;
+      const srcY = Math.max(0, y0 - pondH);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, y0, W, pondH);
+      ctx.clip();
+      ctx.translate(0, H);
+      ctx.scale(1, -1);
+      ctx.globalAlpha = 0.42;
+      try {
+        ctx.drawImage(canvas, 0, srcY, W, pondH, 0, 0, W, pondH);
+      } catch (e) {}
+      ctx.restore();
+      const g = ctx.createLinearGradient(0, y0, 0, H);
+      g.addColorStop(0, 'rgba(5,8,18,0.08)');
+      g.addColorStop(0.22, 'rgba(10,28,48,0.22)');
+      g.addColorStop(0.65, 'rgba(6,18,36,0.48)');
+      g.addColorStop(1, 'rgba(3,8,18,0.78)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, y0, W, pondH);
+      ctx.fillStyle = 'rgba(160,200,255,0.12)';
+      ctx.fillRect(0, y0, W, 1.2);
     }
     controlsReady = true;
     syncQuick();
     if (autoFlow) pickFlowSlider();
     frame(t0);
 
-    const APP_VER = '1.4.5';
+    const APP_VER = '1.4.7';
     function shareUrl() {
       try {
         const u = new URL(location.href);

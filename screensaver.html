@@ -253,6 +253,7 @@
         <div class="togs">
           <button type="button" class="tog on" id="glow" aria-pressed="true">Glow</button>
           <button type="button" class="tog on" id="starsOn" aria-pressed="true">Stars</button>
+          <button type="button" class="tog" id="pondOn" aria-pressed="false">Pond</button>
           <button type="button" class="tog on" id="showEq" aria-pressed="true">Equator</button>
           <button type="button" class="tog on" id="showDots" aria-pressed="true">Dots</button>
           <button type="button" class="tog" id="fillOn" aria-pressed="false">Fill</button>
@@ -271,7 +272,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.4.5 · launch snake · multi auto-flow · tilt · install · altitude fly · deep zoom · Ko-fi</div>
+    <div id="ver">v1.4.7 · full 3D tilt worm · pond · launch snake · multi auto-flow · tilt</div>
   </div>
 
   <div id="qrModal">
@@ -302,11 +303,11 @@
     let snakePos = null, snakeN = null;
     let tiltDiscovered = false;
     try { tiltDiscovered = localStorage.getItem('circles_tilt_discovered') === '1'; } catch (e) {}
-    let showEq = true, showDots = true, glow = true, fillOn = false, starsOn = true, autoSpin = true, tiltOn = false;
+    let showEq = true, showDots = true, glow = true, fillOn = false, starsOn = true, pondOn = false, autoSpin = true, tiltOn = false;
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.4.5';
+    const APP_VER = '1.4.7';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -598,6 +599,7 @@
     bindRange('flyAlt', 'flyAltVal', parseFloat, v => v.toFixed(2), v => flyAlt = v);
     bindCheck('glow', v => glow = v);
     bindCheck('starsOn', v => starsOn = v);
+    bindCheck('pondOn', v => pondOn = v);
     bindCheck('showEq', v => showEq = v);
     bindCheck('showDots', v => showDots = v);
     bindCheck('fillOn', v => fillOn = v);
@@ -712,8 +714,9 @@
       }
       const dBeta = clampNum(beta - tiltBaseBeta, -50, 50);
       const dGamma = clampNum(gamma - tiltBaseGamma, -50, 50);
-      const yawSens = launchMode ? 0.062 : 0.032;
-      const pitchSens = launchMode ? 0.052 : 0.026;
+      // Launch: pitch (up/down) at least as hot as yaw so the worm has full 3D stick feel
+      const yawSens = launchMode ? 0.072 : 0.032;
+      const pitchSens = launchMode ? 0.088 : 0.026;
       tiltTargetY = dGamma * yawSens;
       tiltTargetX = dBeta * pitchSens;
     }
@@ -826,7 +829,7 @@
         setOn($('starsOn'), true);
         clearTrails();
         seedLaunchSnake();
-        showToast('Launch — lead flies its normal, flock snakes behind');
+        showToast('Launch — tilt the phone to fly the worm');
         hideHint(); keepAwake();
       } else {
         launchMode = false;
@@ -870,31 +873,55 @@
       const baseT = (simTime * rate) / CYCLE;
       const leadAnim = animState(baseT);
 
-      // Sphere action still gently curves the lead's preferred normal (beta open/close)
+      // Tiny residual sphere-curve only — must not fight free pitch/yaw
       const cl = Math.cos(leadLon), sl = Math.sin(leadLon);
       const nAnim = [
         Math.cos(leadAnim.beta) * cl,
         Math.sin(leadAnim.beta),
         Math.cos(leadAnim.beta) * sl
       ];
-      const track = 0.28;
+      const track = launchMode ? 0.06 : 0.28;
       leadHeading[0] += (nAnim[0] - leadHeading[0]) * Math.min(1, dt * track);
       leadHeading[1] += (nAnim[1] - leadHeading[1]) * Math.min(1, dt * track);
       leadHeading[2] += (nAnim[2] - leadHeading[2]) * Math.min(1, dt * track);
       leadHeading = norm3(leadHeading);
 
-      // Tilt steers heading in camera axes (physics only — camera stays chase)
-      const cy = Math.cos(rotY), sy = Math.sin(rotY);
-      const cxr = Math.cos(rotX), sx = Math.sin(rotX);
-      const right = [cy, 0, -sy];
-      const up = [sy * sx, cxr, cy * sx];
-      const forward = [sy * cxr, -sx, cy * cxr];
+      // Full 3D stick: yaw/pitch in the worm's own frame (not camera axes)
       if (launchMode) {
-        const steer = 3.1;
-        leadHeading[0] += (right[0] * tiltSmoothY + up[0] * (-tiltSmoothX) + forward[0] * tiltSmoothY * 0.15) * steer * dt;
-        leadHeading[1] += (right[1] * tiltSmoothY + up[1] * (-tiltSmoothX) + forward[1] * tiltSmoothY * 0.15) * steer * dt;
-        leadHeading[2] += (right[2] * tiltSmoothY + up[2] * (-tiltSmoothX) + forward[2] * tiltSmoothY * 0.15) * steer * dt;
-        leadHeading = norm3(leadHeading);
+        const fwd = leadHeading;
+        let refUp = [0, 1, 0];
+        if (Math.abs(fwd[1]) > 0.88) {
+          // Near vertical — fall back to camera up so basis stays stable
+          const cy = Math.cos(rotY), sy = Math.sin(rotY);
+          const cxr = Math.cos(rotX), sx = Math.sin(rotX);
+          refUp = [sy * sx, cxr, cy * sx];
+        }
+        let rightW = [
+          refUp[1] * fwd[2] - refUp[2] * fwd[1],
+          refUp[2] * fwd[0] - refUp[0] * fwd[2],
+          refUp[0] * fwd[1] - refUp[1] * fwd[0]
+        ];
+        let rLen = Math.hypot(rightW[0], rightW[1], rightW[2]);
+        if (rLen < 1e-4) {
+          const cy = Math.cos(rotY), sy = Math.sin(rotY);
+          rightW = [cy, 0, -sy];
+          rLen = 1;
+        }
+        rightW = [rightW[0] / rLen, rightW[1] / rLen, rightW[2] / rLen];
+        const upW = norm3([
+          fwd[1] * rightW[2] - fwd[2] * rightW[1],
+          fwd[2] * rightW[0] - fwd[0] * rightW[2],
+          fwd[0] * rightW[1] - fwd[1] * rightW[0]
+        ]);
+        // tiltSmoothY = left/right (gamma), tiltSmoothX = up/down (beta)
+        const yawRate = tiltSmoothY * 3.6;
+        const pitchRate = (-tiltSmoothX) * 4.4; // pitch a touch hotter
+        const steer = 1;
+        leadHeading = norm3([
+          fwd[0] + (rightW[0] * yawRate + upW[0] * pitchRate) * steer * dt,
+          fwd[1] + (rightW[1] * yawRate + upW[1] * pitchRate) * steer * dt,
+          fwd[2] + (rightW[2] * yawRate + upW[2] * pitchRate) * steer * dt
+        ]);
       }
 
       // Cruise along heading — free of the sphere surface
@@ -1385,6 +1412,41 @@
           if (N <= 80) drawDot(T, 'rgba(255,210,80,0.9)', 2.6);
         }
       }
+      if (pondOn) drawPondReflect();
+    }
+    // Cheap fake pond: flip the band just above the bottom 20% into that strip + fade tint.
+    // Stars / trails / circles already on the canvas get mirrored for free.
+    function drawPondReflect() {
+      const pondH = H * 0.2;
+      if (pondH < 8 || W < 8) return;
+      const y0 = H - pondH;
+      const srcY = Math.max(0, y0 - pondH);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, y0, W, pondH);
+      ctx.clip();
+      ctx.translate(0, H);
+      ctx.scale(1, -1);
+      ctx.globalAlpha = 0.42;
+      try {
+        ctx.drawImage(
+          canvas,
+          0, srcY * dpr, W * dpr, pondH * dpr,
+          0, 0, W, pondH
+        );
+      } catch (e) { /* ignore rare self-copy quirks */ }
+      ctx.restore();
+
+      // Soft fade into water + slight horizon
+      const g = ctx.createLinearGradient(0, y0, 0, H);
+      g.addColorStop(0, 'rgba(5,8,18,0.08)');
+      g.addColorStop(0.22, 'rgba(10,28,48,0.22)');
+      g.addColorStop(0.65, 'rgba(6,18,36,0.48)');
+      g.addColorStop(1, 'rgba(3,8,18,0.78)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, y0, W, pondH);
+      ctx.fillStyle = 'rgba(160,200,255,0.12)';
+      ctx.fillRect(0, y0, W, 1.2);
     }
     frame(t0);
   </script>
