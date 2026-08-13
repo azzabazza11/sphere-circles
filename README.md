@@ -6,7 +6,7 @@ Animated tangential circles on a sphere — desktop playground + phone app.
 
 - **All apps hub:** https://azzabazza11.github.io/
 - Desktop: https://azzabazza11.github.io/sphere-circles/
-- Phone app: https://azzabazza11.github.io/sphere-circles/screensaver.html?v=1.4.4
+- Phone app: https://azzabazza11.github.io/sphere-circles/screensaver.html?v=1.4.5
 
 ## Local
 
@@ -24,7 +24,7 @@ Open http://localhost:8080/
 - **Mirror** — every other circle takes the reflected pathway; all ease home when Fly turns off
 - **Vel by R** / **Inward** fly options, plus trails
 - **Auto flow** — 1–3 controls wander on their own with varying hold times and rates (Flow spd scales overall); no tap-to-jump
-- **Tilt** / **Launch** (phone) — tilt steers the view; Launch flies the flock with chase camera
+- **Tilt** / **Launch** (phone) — tilt steers the view; Launch peels a lead circle along its normal with a snake stocking of followers
 - Concertina control sections and fat, finger-friendly sliders
 - Desktop presets (Lattice, Nebula, Launch, Helix, Wire, Dense)
 - Look controls: glow, ghost, hue drift, pulse, fill, stars, orbit

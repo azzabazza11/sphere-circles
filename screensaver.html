@@ -271,7 +271,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.4.4 · multi auto-flow · launch chase · tilt · install · altitude fly · deep zoom · Ko-fi · lit toggles · view lift · Share QR</div>
+    <div id="ver">v1.4.5 · launch snake · multi auto-flow · tilt · install · altitude fly · deep zoom · Ko-fi</div>
   </div>
 
   <div id="qrModal">
@@ -296,15 +296,17 @@
     let flyMode = false, flyAlt = 1.25, flyIn = false, flyVel = false, flyMirror = false, showTrails = true;
     let flyBlend = 0; // 0 = on sphere, 1 = full fly (smooth settle)
     let launchMode = false, launchBlend = 0;
-    let craftPos = [0, 0, 0], craftVel = [0, 0, 0];
     let launchZoomBase = 280, chasePanX = 0, chasePanY = 0;
+    let snakeReady = false, leadLon = 0;
+    let leadHeading = [0, 1, 0], leadVel = [0, 0, 0];
+    let snakePos = null, snakeN = null;
     let tiltDiscovered = false;
     try { tiltDiscovered = localStorage.getItem('circles_tilt_discovered') === '1'; } catch (e) {}
     let showEq = true, showDots = true, glow = true, fillOn = false, starsOn = true, autoSpin = true, tiltOn = false;
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.4.4';
+    const APP_VER = '1.4.5';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -314,6 +316,28 @@
     const R = 1, CYCLE = 6, MAX_N = 108, TRAIL_LEN = 70;
     const trails = Array.from({ length: MAX_N }, () => []);
     function clearTrails() { for (let i = 0; i < MAX_N; i++) trails[i].length = 0; }
+    // Launch snake: lead flies along its plane normal; followers string-trail behind
+    snakePos = Array.from({ length: MAX_N }, () => [0, 0, 0]);
+    snakeN = Array.from({ length: MAX_N }, () => [0, 1, 0]);
+    function norm3(v) {
+      const L = Math.hypot(v[0], v[1], v[2]) || 1;
+      return [v[0] / L, v[1] / L, v[2] / L];
+    }
+    function lerp3(a, b, t) {
+      return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+    }
+    function sub3(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+    function spherePose(k, baseT) {
+      const stagger = N > 1 ? (phase * k) / N : 0;
+      const tk = baseT + stagger;
+      const { rho, beta } = animState(tk);
+      const lon = (2 * Math.PI * k) / N + simTime * drift + twist * beta;
+      const cl = Math.cos(lon), sl = Math.sin(lon);
+      const n = [Math.cos(beta) * cl, Math.sin(beta), Math.cos(beta) * sl];
+      const flyOff = flyOffset(tk, lon, k);
+      const surf = [R * Math.cos(rho) * n[0], R * Math.cos(rho) * n[1], R * Math.cos(rho) * n[2]];
+      return { rho, beta, lon, n, tk, center: add(surf, flyOff) };
+    }
 
     function setPanel(open) {
       panel.classList.toggle('open', open);
@@ -787,6 +811,11 @@
             return;
           }
         }
+        // Stocking setup: dense staggered chain
+        N = 108; phase = 1; rate = 1;
+        setSliderSilent('count', N);
+        setSliderSilent('phase', phase);
+        setSliderSilent('rate', rate);
         launchMode = true;
         setOn($('launchMode'), true);
         launchZoomBase = zoom;
@@ -796,11 +825,8 @@
         starsOn = true;
         setOn($('starsOn'), true);
         clearTrails();
-        const kick = 2.4;
-        craftVel[0] += Math.sin(rotY) * kick;
-        craftVel[1] += 0.35 * kick;
-        craftVel[2] += Math.cos(rotY) * kick;
-        showToast('Launch — tilt steers the flock');
+        seedLaunchSnake();
+        showToast('Launch — lead flies its normal, flock snakes behind');
         hideHint(); keepAwake();
       } else {
         launchMode = false;
@@ -809,64 +835,154 @@
       }
       syncQuick();
     }
+    function seedLaunchSnake() {
+      const baseT = (simTime * rate) / CYCLE;
+      for (let k = 0; k < N; k++) {
+        const p = spherePose(k, baseT);
+        snakePos[k][0] = p.center[0];
+        snakePos[k][1] = p.center[1];
+        snakePos[k][2] = p.center[2];
+        snakeN[k][0] = p.n[0];
+        snakeN[k][1] = p.n[1];
+        snakeN[k][2] = p.n[2];
+      }
+      const lead = spherePose(0, baseT);
+      leadLon = lead.lon;
+      leadHeading = [lead.n[0], lead.n[1], lead.n[2]];
+      const kick = 2.8;
+      leadVel = [leadHeading[0] * kick, leadHeading[1] * kick, leadHeading[2] * kick];
+      snakeReady = true;
+    }
     function updateLaunchPhysics(dt) {
       const target = launchMode ? 1 : 0;
-      launchBlend += (target - launchBlend) * Math.min(1, dt * 1.7);
+      launchBlend += (target - launchBlend) * Math.min(1, dt * 1.55);
       if (Math.abs(launchBlend - target) < 0.001) launchBlend = target;
 
       if (launchBlend < 1e-4 && !launchMode) {
-        craftPos[0] = craftPos[1] = craftPos[2] = 0;
-        craftVel[0] = craftVel[1] = craftVel[2] = 0;
+        snakeReady = false;
+        leadVel[0] = leadVel[1] = leadVel[2] = 0;
         return;
       }
+      if (launchMode && !snakeReady) seedLaunchSnake();
+      if (!snakeReady) return;
 
-      // Thrust in screen axes of the fixed camera (rotY/rotX), not tilt-look
+      const lb = launchBlend;
+      const baseT = (simTime * rate) / CYCLE;
+      const leadAnim = animState(baseT);
+
+      // Sphere action still gently curves the lead's preferred normal (beta open/close)
+      const cl = Math.cos(leadLon), sl = Math.sin(leadLon);
+      const nAnim = [
+        Math.cos(leadAnim.beta) * cl,
+        Math.sin(leadAnim.beta),
+        Math.cos(leadAnim.beta) * sl
+      ];
+      const track = 0.28;
+      leadHeading[0] += (nAnim[0] - leadHeading[0]) * Math.min(1, dt * track);
+      leadHeading[1] += (nAnim[1] - leadHeading[1]) * Math.min(1, dt * track);
+      leadHeading[2] += (nAnim[2] - leadHeading[2]) * Math.min(1, dt * track);
+      leadHeading = norm3(leadHeading);
+
+      // Tilt steers heading in camera axes (physics only — camera stays chase)
       const cy = Math.cos(rotY), sy = Math.sin(rotY);
       const cxr = Math.cos(rotX), sx = Math.sin(rotX);
       const right = [cy, 0, -sy];
       const up = [sy * sx, cxr, cy * sx];
       const forward = [sy * cxr, -sx, cy * cxr];
-
-      const thrust = launchMode ? 15.5 : 0;
-      const tx = tiltSmoothY * thrust;
-      const ty = -tiltSmoothX * thrust;
-      const tz = (Math.abs(tiltSmoothX) + Math.abs(tiltSmoothY)) * thrust * 0.18;
-
-      craftVel[0] += (right[0]*tx + forward[0]*ty + up[0]*tz) * dt;
-      craftVel[1] += (right[1]*tx + forward[1]*ty + up[1]*tz) * dt;
-      craftVel[2] += (right[2]*tx + forward[2]*ty + up[2]*tz) * dt;
-
-      // drag
-      const damp = Math.pow(launchMode ? 0.92 : 0.84, dt * 60);
-      craftVel[0] *= damp; craftVel[1] *= damp; craftVel[2] *= damp;
-
-      const spd = Math.hypot(craftVel[0], craftVel[1], craftVel[2]);
-      const maxSpd = 7.8;
-      if (spd > maxSpd) {
-        const s = maxSpd / spd;
-        craftVel[0] *= s; craftVel[1] *= s; craftVel[2] *= s;
+      if (launchMode) {
+        const steer = 3.1;
+        leadHeading[0] += (right[0] * tiltSmoothY + up[0] * (-tiltSmoothX) + forward[0] * tiltSmoothY * 0.15) * steer * dt;
+        leadHeading[1] += (right[1] * tiltSmoothY + up[1] * (-tiltSmoothX) + forward[1] * tiltSmoothY * 0.15) * steer * dt;
+        leadHeading[2] += (right[2] * tiltSmoothY + up[2] * (-tiltSmoothX) + forward[2] * tiltSmoothY * 0.15) * steer * dt;
+        leadHeading = norm3(leadHeading);
       }
 
-      craftPos[0] += craftVel[0] * dt;
-      craftPos[1] += craftVel[1] * dt;
-      craftPos[2] += craftVel[2] * dt;
+      // Cruise along heading — free of the sphere surface
+      const tiltMag = Math.hypot(tiltSmoothX, tiltSmoothY);
+      const cruise = (launchMode ? 2.35 : 0) * (1 + tiltMag * 1.35);
+      const accel = 9.5;
+      leadVel[0] += (leadHeading[0] * cruise - leadVel[0]) * Math.min(1, dt * accel);
+      leadVel[1] += (leadHeading[1] * cruise - leadVel[1]) * Math.min(1, dt * accel);
+      leadVel[2] += (leadHeading[2] * cruise - leadVel[2]) * Math.min(1, dt * accel);
+      const damp = Math.pow(launchMode ? 0.94 : 0.82, dt * 60);
+      leadVel[0] *= damp; leadVel[1] *= damp; leadVel[2] *= damp;
+      const spd = Math.hypot(leadVel[0], leadVel[1], leadVel[2]);
+      const maxSpd = 8.5;
+      if (spd > maxSpd) {
+        const s = maxSpd / spd;
+        leadVel[0] *= s; leadVel[1] *= s; leadVel[2] *= s;
+      }
 
-      // soft leash so the flock stays findable
-      const dist = Math.hypot(craftPos[0], craftPos[1], craftPos[2]);
-      const leash = 11;
+      snakePos[0][0] += leadVel[0] * dt * lb;
+      snakePos[0][1] += leadVel[1] * dt * lb;
+      snakePos[0][2] += leadVel[2] * dt * lb;
+      // Lead plane faces flight direction
+      const nBlend = Math.min(1, dt * 6);
+      snakeN[0][0] += (leadHeading[0] - snakeN[0][0]) * nBlend;
+      snakeN[0][1] += (leadHeading[1] - snakeN[0][1]) * nBlend;
+      snakeN[0][2] += (leadHeading[2] - snakeN[0][2]) * nBlend;
+      const n0 = norm3(snakeN[0]);
+      snakeN[0][0] = n0[0]; snakeN[0][1] = n0[1]; snakeN[0][2] = n0[2];
+
+      // Soft leash so the stocking stays findable
+      const dist = Math.hypot(snakePos[0][0], snakePos[0][1], snakePos[0][2]);
+      const leash = 14;
       if (dist > leash) {
         const excess = (dist - leash) / dist;
-        craftPos[0] *= 1 - excess * 0.08;
-        craftPos[1] *= 1 - excess * 0.08;
-        craftPos[2] *= 1 - excess * 0.08;
-        craftVel[0] *= 0.96; craftVel[1] *= 0.96; craftVel[2] *= 0.96;
+        snakePos[0][0] *= 1 - excess * 0.07;
+        snakePos[0][1] *= 1 - excess * 0.07;
+        snakePos[0][2] *= 1 - excess * 0.07;
+        leadVel[0] *= 0.96; leadVel[1] *= 0.96; leadVel[2] *= 0.96;
+      }
+
+      // Followers: string trail + magnetic plane orientation toward previous
+      for (let k = 1; k < N; k++) {
+        const prev = snakePos[k - 1];
+        const prevN = snakeN[k - 1];
+        const stK = animState(baseT + (N > 1 ? (phase * k) / N : 0));
+        const spacing = 0.072 + 0.055 * Math.sin(stK.rho);
+        const target = [
+          prev[0] - prevN[0] * spacing,
+          prev[1] - prevN[1] * spacing,
+          prev[2] - prevN[2] * spacing
+        ];
+        // Rear of stocking lags a touch more
+        const follow = Math.min(1, dt * (7.2 - Math.min(3.5, k * 0.028))) * (0.5 + 0.5 * lb);
+        snakePos[k][0] += (target[0] - snakePos[k][0]) * follow;
+        snakePos[k][1] += (target[1] - snakePos[k][1]) * follow;
+        snakePos[k][2] += (target[2] - snakePos[k][2]) * follow;
+
+        const toward = sub3(prev, snakePos[k]);
+        const tLen = Math.hypot(toward[0], toward[1], toward[2]);
+        if (tLen > 1e-5) {
+          const desired = [toward[0] / tLen, toward[1] / tLen, toward[2] / tLen];
+          // Face previous (chain direction) with a bit of previous plane for stocking coplanar feel
+          const mixed = norm3([
+            desired[0] * 0.72 + prevN[0] * 0.28,
+            desired[1] * 0.72 + prevN[1] * 0.28,
+            desired[2] * 0.72 + prevN[2] * 0.28
+          ]);
+          const ok = Math.min(1, dt * (5.8 - Math.min(2.5, k * 0.02))) * lb;
+          snakeN[k][0] += (mixed[0] - snakeN[k][0]) * ok;
+          snakeN[k][1] += (mixed[1] - snakeN[k][1]) * ok;
+          snakeN[k][2] += (mixed[2] - snakeN[k][2]) * ok;
+          const nn = norm3(snakeN[k]);
+          snakeN[k][0] = nn[0]; snakeN[k][1] = nn[1]; snakeN[k][2] = nn[2];
+        }
       }
 
       if (!launchMode) {
-        // spring home when disengaging
-        craftVel[0] += -craftPos[0] * 2.8 * dt;
-        craftVel[1] += -craftPos[1] * 2.8 * dt;
-        craftVel[2] += -craftPos[2] * 2.8 * dt;
+        // Spring everyone home toward current sphere poses while blending out
+        for (let k = 0; k < N; k++) {
+          const home = spherePose(k, baseT);
+          snakePos[k][0] += (home.center[0] - snakePos[k][0]) * Math.min(1, dt * 2.6);
+          snakePos[k][1] += (home.center[1] - snakePos[k][1]) * Math.min(1, dt * 2.6);
+          snakePos[k][2] += (home.center[2] - snakePos[k][2]) * Math.min(1, dt * 2.6);
+          snakeN[k][0] += (home.n[0] - snakeN[k][0]) * Math.min(1, dt * 3.2);
+          snakeN[k][1] += (home.n[1] - snakeN[k][1]) * Math.min(1, dt * 3.2);
+          snakeN[k][2] += (home.n[2] - snakeN[k][2]) * Math.min(1, dt * 3.2);
+        }
+        leadVel[0] *= 0.9; leadVel[1] *= 0.9; leadVel[2] *= 0.9;
       }
     }
 
@@ -889,13 +1005,19 @@
         if (!launchMode && Math.abs(chasePanY) < 0.5) chasePanY = 0;
         return;
       }
-      const flock = [craftPos[0] * lb, craftPos[1] * lb, craftPos[2] * lb];
-      // Soft lead so chase stays ahead of motion instead of lagging off-frame
-      const lead = 0.22;
+      if (!snakeReady) return;
+      // Chase the lead (and a bit of the mid-stocking) so the snake stays framed
+      const mid = Math.min(N - 1, Math.floor(N * 0.22));
+      const flock = [
+        (snakePos[0][0] * 0.72 + snakePos[mid][0] * 0.28) * lb,
+        (snakePos[0][1] * 0.72 + snakePos[mid][1] * 0.28) * lb,
+        (snakePos[0][2] * 0.72 + snakePos[mid][2] * 0.28) * lb
+      ];
+      const lead = 0.2;
       const aim = [
-        flock[0] + craftVel[0] * lead * lb,
-        flock[1] + craftVel[1] * lead * lb,
-        flock[2] + craftVel[2] * lead * lb
+        flock[0] + leadVel[0] * lead * lb,
+        flock[1] + leadVel[1] * lead * lb,
+        flock[2] + leadVel[2] * lead * lb
       ];
       const q = projCore(aim);
       const targetPanX = cx - q.x;
@@ -907,9 +1029,10 @@
       const qNow = projCore(flock);
       const residual = Math.hypot(qNow.x + chasePanX - cx, qNow.y + chasePanY - cy) / Math.max(1, Math.min(W, H));
       const dist = Math.hypot(flock[0], flock[1], flock[2]);
-      const spd = Math.hypot(craftVel[0], craftVel[1], craftVel[2]) * lb;
-      // Pull out with travel distance / speed / any leftover off-center; ease in when calm
-      const zoomPull = 1 + Math.min(0.9, dist * 0.06 + residual * 1.6 + spd * 0.09);
+      const spd = Math.hypot(leadVel[0], leadVel[1], leadVel[2]) * lb;
+      // Pull out enough to keep the stocking length roughly in frame
+      const chainLen = Math.min(2.8, N * 0.012);
+      const zoomPull = 1 + Math.min(1.15, dist * 0.055 + residual * 1.5 + spd * 0.08 + chainLen * 0.22 * lb);
       const zoomTarget = clampZoom(launchZoomBase * zoomPull);
       if (launchMode || lb > 0.04) {
         zoom += (zoomTarget - zoom) * Math.min(1, dt * 2.4);
@@ -1040,17 +1163,19 @@
     let flowTargetVoices = 1;
 
     function makeFlowVoice(avoidKeys) {
-      const pool = FLOW_SLIDERS.filter(s => !avoidKeys.has(s.key));
-      const s = (pool.length ? pool : FLOW_SLIDERS)[Math.floor(Math.random() * (pool.length || FLOW_SLIDERS.length))];
-      // Wide rate mix: slow drifts, normal crawls, occasional fast sweeps, rare rests
+      const lock = launchMode ? new Set(['N', 'phase', 'rate']) : null;
+      const pool = FLOW_SLIDERS.filter(s => !avoidKeys.has(s.key) && !(lock && lock.has(s.key)));
+      const fallback = FLOW_SLIDERS.filter(s => !(lock && lock.has(s.key)));
+      const pickFrom = pool.length ? pool : (fallback.length ? fallback : FLOW_SLIDERS);
+      const chosen = pickFrom[Math.floor(Math.random() * pickFrom.length)];
       let spd;
       const roll = Math.random();
-      if (roll < 0.08) spd = 0;                 // brief rest / hold value
-      else if (roll < 0.28) spd = rnd(0.12, 0.4); // slow
-      else if (roll < 0.82) spd = rnd(0.55, 1.6); // normal
-      else spd = rnd(2.0, 4.2);                   // fast sweep
+      if (roll < 0.08) spd = 0;
+      else if (roll < 0.28) spd = rnd(0.12, 0.4);
+      else if (roll < 0.82) spd = rnd(0.55, 1.6);
+      else spd = rnd(2.0, 4.2);
       return {
-        key: s.key,
+        key: chosen.key,
         dir: Math.random() < 0.5 ? -1 : 1,
         spd,
         hold: spd === 0 ? rnd(1.2, 4.5) : rnd(2.0, 18)
@@ -1100,6 +1225,10 @@
           voice.key = next.key; voice.dir = next.dir; voice.spd = next.spd; voice.hold = next.hold;
         }
         if (voice.spd <= 1e-6) continue;
+        if (launchMode && (voice.key === 'N' || voice.key === 'phase' || voice.key === 'rate')) {
+          voice.hold = 0;
+          continue;
+        }
         const s = FLOW_SLIDERS.find(x => x.key === voice.key);
         if (!s) continue;
         const span = Math.max(1e-6, s.max - s.min);
@@ -1204,39 +1333,38 @@
       const seg = segCount();
       const doGlow = glow && N <= 140;
       const doDots = showDots && N <= 180;
-      const doTrails = (flyBlend > 0.04 || launchBlend > 0.04) && showTrails && N <= 64;
-      // Equator stays as a home beacon (no craft offset)
-      if (showEq) strokePts(circlePts([0,1,0], Math.PI/2, [0,0,0], 48), 'rgba(255,210,80,' + (0.85 * (1 - 0.55 * launchBlend)) + ')', 2);
+      const doTrails = (flyBlend > 0.04 || launchBlend > 0.04) && showTrails && (N <= 64 || (launchBlend > 0.04 && N <= 108));
+      // Equator stays as a home beacon (fades in launch)
+      if (showEq) strokePts(circlePts([0,1,0], Math.PI/2, [0,0,0], 48), 'rgba(255,210,80,' + (0.85 * (1 - 0.7 * launchBlend)) + ')', 2);
 
       const hueNow = hue0 + simTime * hueSpd;
       const lb = launchBlend;
-      const craft = [craftPos[0] * lb, craftPos[1] * lb, craftPos[2] * lb];
       const items = [];
       for (let k = 0; k < N; k++) {
-        const stagger = N > 1 ? (phase * k) / N : 0;
-        const tk = baseT + stagger;
-        const { rho, beta } = animState(tk);
-        const lon = (2*Math.PI*k)/N + simTime*drift + twist*beta;
+        const sp = spherePose(k, baseT);
+        let rho = sp.rho, n = sp.n, center = sp.center;
+        if (snakeReady && lb > 0.001) {
+          // Free-flight stocking: blend off the sphere onto snake pos / oriented normals
+          center = lerp3(sp.center, snakePos[k], lb);
+          n = norm3(lerp3(sp.n, snakeN[k], lb));
+        }
+        // circlePts expects offset such that surf + offset = center
+        const cR = R * Math.cos(rho);
+        const off = [center[0] - cR * n[0], center[1] - cR * n[1], center[2] - cR * n[2]];
+        const lon = sp.lon;
         const cl = Math.cos(lon), sl = Math.sin(lon);
-        const n = [Math.cos(beta)*cl, Math.sin(beta), Math.cos(beta)*sl];
-        const flyOff = flyOffset(tk, lon, k);
-        // Launch peels the flock off the sphere along each plane normal, then craft carries them
-        const peelAmt = lb * (1.35 + 0.9 * Math.sin(rho));
-        const peel = [n[0] * peelAmt, n[1] * peelAmt, n[2] * peelAmt];
-        const off = add(add(flyOff, peel), craft);
-        const surf = [R*Math.cos(rho)*n[0], R*Math.cos(rho)*n[1], R*Math.cos(rho)*n[2]];
-        const center = add(surf, off);
         items.push({ k, rho, n, off, center, T:[R*cl,0,R*sl], cz: rot(center)[2] });
       }
       if (N <= 200) items.sort((a,b)=>a.cz-b.cz);
-      const wScale = N > 200 ? Math.max(0.45, 1.4 - N/700) : 1;
+      const wScale = N > 200 ? Math.max(0.45, 1.4 - N/700) : (N > 80 ? Math.max(0.55, 1.15 - N/400) : 1);
       for (const it of items) {
         const {k,rho,n,off,center,T} = it;
         const h = hueNow + (k/Math.max(N,1))*360;
         const pul = 1 + pulse*Math.sin(simTime*3.2 + k*0.4);
         const w = lineW * pul * wScale;
         const col = hsla(h,90,62,N>200?0.7:0.95);
-        if (doTrails) {
+        const trailThis = doTrails && (N <= 64 || k === 0 || (k % 3) === 0);
+        if (trailThis) {
           const tr = trails[k]; tr.push(center.slice());
           if (tr.length > TRAIL_LEN) tr.shift();
           if (tr.length > 1) strokePts(tr.map(p=>proj(p)), hsla(h,80,60,0.35), 1.1);
