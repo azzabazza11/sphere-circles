@@ -196,9 +196,10 @@
           <button type="button" class="tog" id="flyMode" aria-pressed="false">Fly</button>
           <button type="button" class="tog" id="flyVel" aria-pressed="false">Vel by R</button>
           <button type="button" class="tog" id="flyIn" aria-pressed="false">Inward</button>
+          <button type="button" class="tog" id="flyMirror" aria-pressed="false">Mirror</button>
           <button type="button" class="tog on" id="showTrails" aria-pressed="true">Trails</button>
         </div>
-        <label>Fly spd <input id="flyAlt" type="range" min="0" max="2" step="0.01" value="0.55"><span class="val" id="flyAltVal">0.55</span></label>
+        <label>Altitude <input id="flyAlt" type="range" min="0" max="3.5" step="0.01" value="1.25"><span class="val" id="flyAltVal">1.25</span></label>
       </div>
     </div>
     <div class="acc" data-acc>
@@ -222,7 +223,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.3.7 · deep zoom · Ko-fi · lit toggles · view lift · normal-integral fly · Share QR · concertina sections · fat sliders · tap jumps flow</div>
+    <div id="ver">v1.3.8 · altitude fly · deep zoom · Ko-fi · lit toggles · view lift · normal-integral fly · Share QR · concertina sections · fat sliders · tap jumps flow</div>
   </div>
 
   <div id="qrModal">
@@ -241,13 +242,13 @@
   <script>
     const $ = (id) => document.getElementById(id);
     let N = 16, phase = 0.35, rate = 1, twist = 0, drift = 0;
-    let flyMode = false, flyAlt = 0.55, flyIn = false, flyVel = false, showTrails = true;
+    let flyMode = false, flyAlt = 1.25, flyIn = false, flyVel = false, flyMirror = false, showTrails = true;
     let flyBlend = 0; // 0 = on sphere, 1 = full fly (smooth settle)
     let showEq = true, showDots = true, glow = true, fillOn = false, starsOn = true, autoSpin = true;
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.3.7';
+    const APP_VER = '1.3.8';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -433,6 +434,7 @@
     bindCheck('flyMode', v => { flyMode = v; if (controlsReady) clearTrails(); syncQuick(); });
     bindCheck('flyVel', v => { flyVel = v; if (controlsReady) { rebuildFlyTable(); clearTrails(); } });
     bindCheck('flyIn', v => flyIn = v);
+    bindCheck('flyMirror', v => { flyMirror = v; if (controlsReady) clearTrails(); });
     bindCheck('showTrails', v => showTrails = v);
     bindRange('flyAlt', 'flyAltVal', parseFloat, v => v.toFixed(2), v => flyAlt = v);
     bindCheck('glow', v => glow = v);
@@ -452,12 +454,13 @@
     }
 
 
-    // Fly: integrate travel along the circle-plane normal as that normal tilts.
-    // Path is built on meridian 0 then spun by longitude so phased circles stay in sequence.
-    // Raw ∫n has a small net equatorial drift per cycle; we remove it so the path returns
-    // (matches the grow/shrink symmetry — circles come home each cycle).
+    // Fly: unit-normalized integral of the tilting plane normal, scaled by Altitude.
+    // Paths return each cycle. Mirror sends odd circles on the reflected meridian path.
+    // Bloom flares them farther when open; a soft helix swirl peels them into space.
+    // flyBlend eases everyone back onto the sphere when Fly is turned off.
     var flyTable = [[0, 0]];
     var flyEnd = [0, 0];
+    var flyNorm = 1;
     function rebuildFlyTable() {
       const n = 512;
       const tab = [[0, 0]];
@@ -468,7 +471,7 @@
         const st = animState(t0);
         const nx = Math.cos(st.beta), ny = Math.sin(st.beta);
         let w = 1;
-        if (flyVel) w = 0.18 + 0.82 * Math.sin(st.rho); // slow when tiny, fast when open
+        if (flyVel) w = 0.18 + 0.82 * Math.sin(st.rho);
         const ds = (t1 - t0) * CYCLE;
         x += nx * w * ds;
         y += ny * w * ds;
@@ -476,6 +479,14 @@
       }
       flyTable = tab;
       flyEnd = [x, y];
+      let maxR = 1e-6;
+      for (let i = 0; i <= n; i++) {
+        const tt = i / n;
+        const cx = tab[i][0] - tt * x;
+        const cy = tab[i][1] - tt * y;
+        maxR = Math.max(maxR, Math.hypot(cx, cy));
+      }
+      flyNorm = maxR;
     }
     function sampleFlyLocal(t) {
       t = ((t % 1) + 1) % 1;
@@ -485,20 +496,35 @@
       const i1 = Math.min(n, i0 + 1);
       const u = idx - i0;
       const a = flyTable[i0], b = flyTable[i1];
-      const lx = a[0] + (b[0] - a[0]) * u;
-      const ly = a[1] + (b[1] - a[1]) * u;
-      // close the loop: subtract linear drift so off(0) = off(1) = 0
-      return [lx - t * flyEnd[0], ly - t * flyEnd[1], 0];
+      const lx = (a[0] + (b[0] - a[0]) * u - t * flyEnd[0]) / flyNorm;
+      const ly = (a[1] + (b[1] - a[1]) * u - t * flyEnd[1]) / flyNorm;
+      return [lx, ly, 0];
     }
     function rotateY(v, lon) {
       const c = Math.cos(lon), s = Math.sin(lon);
       return [v[0] * c, v[1], -v[0] * s];
     }
-    function flyOffset(t, lon) {
+    function flyOffset(t, lon, k) {
       if (flyBlend < 1e-4 || flyAlt <= 1e-6) return [0, 0, 0];
-      const local = sampleFlyLocal(t);
-      const s = flyAlt * (flyIn ? -1 : 1) * flyBlend;
-      return rotateY([local[0] * s, local[1] * s, 0], lon);
+      const st = animState(t);
+      let local = sampleFlyLocal(t);
+      const mirrored = flyMirror && ((k | 0) & 1);
+      if (mirrored) {
+        // Reflect across the equator in the meridian plane + opposite radial peel
+        local = [-local[0], -local[1], 0];
+      }
+      // Open circles climb farther; tiny ones stay nearer the sphere
+      const bloom = 1 + 0.55 * Math.sin(st.rho);
+      const s = flyAlt * bloom * (flyIn ? -1 : 1) * flyBlend;
+      let lx = local[0] * s;
+      let ly = local[1] * s;
+      // Soft helix: swirl around the flight axis as they climb
+      const swirl = flyAlt * 0.28 * flyBlend * Math.sin(st.rho) * Math.sin(2 * Math.PI * t + (mirrored ? Math.PI : 0));
+      const xz = Math.hypot(lx, 0.0001);
+      const hx = lx - swirl * (ly * 0.35);
+      const hy = ly + swirl * (xz * 0.55);
+      const hz = swirl * (mirrored ? -1 : 1) * 0.65;
+      return rotateY([hx, hy, hz], lon);
     }
     rebuildFlyTable();
 
@@ -624,7 +650,7 @@
       { key:'hueSpd', id:'hueSpd', min:0, max:80, get:()=>hueSpd, set:v=>{ hueSpd=v; setSliderSilent('hueSpd', v); } },
       { key:'pulse', id:'pulse', min:0, max:1, get:()=>pulse, set:v=>{ pulse=v; setSliderSilent('pulse', v); } },
       { key:'ghost', id:'ghost', min:0, max:0.92, get:()=>ghost, set:v=>{ ghost=v; setSliderSilent('ghost', v); } },
-      { key:'flyAlt', id:'flyAlt', min:0, max:2, get:()=>flyAlt, set:v=>{ flyAlt=v; setSliderSilent('flyAlt', v); } },
+      { key:'flyAlt', id:'flyAlt', min:0, max:3.5, get:()=>flyAlt, set:v=>{ flyAlt=v; setSliderSilent('flyAlt', v); } },
       { key:'hue0', id:null, min:0, max:360, get:()=>hue0, set:v=>{ hue0=((v%360)+360)%360; } }
     ];
     var flowKey = null, flowDir = 1, flowHold = 0;
@@ -706,7 +732,7 @@
       updateViewLift(dt);
       // smooth settle when toggling fly
       const flyTarget = flyMode ? 1 : 0;
-      flyBlend += (flyTarget - flyBlend) * Math.min(1, dt * 2.8);
+      flyBlend += (flyTarget - flyBlend) * Math.min(1, dt * 2.2);
       if (Math.abs(flyBlend - flyTarget) < 0.001) flyBlend = flyTarget;
       const baseT = (simTime * rate) / CYCLE;
       if (autoSpin && !drag && pointers.size < 2) rotY += 0.08 * dt;
@@ -736,7 +762,7 @@
         const lon = (2*Math.PI*k)/N + simTime*drift + twist*beta;
         const cl = Math.cos(lon), sl = Math.sin(lon);
         const n = [Math.cos(beta)*cl, Math.sin(beta), Math.cos(beta)*sl];
-        const off = flyOffset(tk, lon);
+        const off = flyOffset(tk, lon, k);
         const center = add([R*Math.cos(rho)*n[0], R*Math.cos(rho)*n[1], R*Math.cos(rho)*n[2]], off);
         items.push({ k, rho, n, off, center, T:[R*cl,0,R*sl], cz: rot(center)[2] });
       }
