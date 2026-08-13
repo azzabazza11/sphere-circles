@@ -272,7 +272,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.4.7 · full 3D tilt worm · pond · launch snake · multi auto-flow · tilt</div>
+    <div id="ver">v1.4.8 · draggable pond horizon · full 3D tilt worm · launch snake</div>
   </div>
 
   <div id="qrModal">
@@ -304,10 +304,16 @@
     let tiltDiscovered = false;
     try { tiltDiscovered = localStorage.getItem('circles_tilt_discovered') === '1'; } catch (e) {}
     let showEq = true, showDots = true, glow = true, fillOn = false, starsOn = true, pondOn = false, autoSpin = true, tiltOn = false;
+    let pondFrac = 0.2; // pond height as fraction of screen (horizon = 1 - pondFrac)
+    try {
+      const pf = parseFloat(localStorage.getItem('circles_pond_frac'));
+      if (Number.isFinite(pf)) pondFrac = pf;
+    } catch (e) {}
+    let pondDragging = false, pondDragId = null;
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.4.7';
+    const APP_VER = '1.4.8';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -599,7 +605,13 @@
     bindRange('flyAlt', 'flyAltVal', parseFloat, v => v.toFixed(2), v => flyAlt = v);
     bindCheck('glow', v => glow = v);
     bindCheck('starsOn', v => starsOn = v);
-    bindCheck('pondOn', v => pondOn = v);
+    bindCheck('pondOn', v => {
+      pondOn = v;
+      if (v) {
+        pondFrac = clampPondFrac(pondFrac);
+        showToast('Pond — drag the horizon line up/down');
+      }
+    });
     bindCheck('showEq', v => showEq = v);
     bindCheck('showDots', v => showDots = v);
     bindCheck('fillOn', v => fillOn = v);
@@ -1109,15 +1121,42 @@
       pinchStartDist = pinchDist();
       pinchStartZoom = zoom;
       drag = false;
+      pondDragging = false; pondDragId = null;
+    }
+    function pondClearancePx() {
+      // Keep horizon a fingertip above the quick buttons
+      const fingertip = 14;
+      const q = $('quick');
+      if (q) {
+        const r = q.getBoundingClientRect();
+        if (r.height > 0) return Math.max(64, (H - r.top) + fingertip);
+      }
+      return 88;
+    }
+    function clampPondFrac(f) {
+      if (!H) return 0.2;
+      const minFrac = Math.min(0.32, Math.max(0.09, pondClearancePx() / H));
+      const maxFrac = 0.58; // leave sky for atmosphere
+      return Math.max(minFrac, Math.min(maxFrac, f));
+    }
+    function horizonY() { return H - H * clampPondFrac(pondFrac); }
+    function savePondFrac() {
+      pondFrac = clampPondFrac(pondFrac);
+      try { localStorage.setItem('circles_pond_frac', String(pondFrac)); } catch (e) {}
     }
     function onDown(x, y, id) {
       if (panel.classList.contains('open')) { closePanel(); return; }
       pointers.set(id, { x, y });
       hideHint(); keepAwake();
-      if (pointers.size >= 2) beginPinch();
-      else {
-        drag = true; lx = x; ly = y;
+      if (pointers.size >= 2) { beginPinch(); return; }
+      // Pond mode: grab near the horizon to slide it up/down
+      if (pondOn && Math.abs(y - horizonY()) < 44) {
+        pondDragging = true;
+        pondDragId = id;
+        drag = false;
+        return;
       }
+      drag = true; lx = x; ly = y;
     }
     function onMove(x, y, id) {
       if (!pointers.has(id)) return;
@@ -1130,6 +1169,10 @@
         }
         return;
       }
+      if (pondDragging && id === pondDragId) {
+        pondFrac = clampPondFrac((H - y) / H);
+        return;
+      }
       if (!drag) return;
       rotY += (x - lx) * 0.008;
       rotX = Math.max(-1.4, Math.min(1.4, rotX + (y - ly) * 0.008));
@@ -1137,6 +1180,10 @@
       if (tiltOn) { tiltBaseBeta = null; tiltBaseGamma = null; tiltSmoothY = 0; tiltSmoothX = 0; tiltTargetY = 0; tiltTargetX = 0; }
     }
     function onUp(id) {
+      if (id === pondDragId) {
+        pondDragging = false; pondDragId = null;
+        savePondFrac();
+      }
       pointers.delete(id);
       if (pointers.size >= 2) beginPinch();
       else if (pointers.size === 1) {
@@ -1414,13 +1461,16 @@
       }
       if (pondOn) drawPondReflect();
     }
-    // Cheap fake pond: flip the band just above the bottom 20% into that strip + fade tint.
+    // Cheap fake pond: flip the band just above the horizon into the pond + fade tint.
     // Stars / trails / circles already on the canvas get mirrored for free.
+    // Drag near the horizon (pond mode) to raise/lower it — stays above the quick buttons.
     function drawPondReflect() {
-      const pondH = H * 0.2;
+      pondFrac = clampPondFrac(pondFrac);
+      const pondH = H * pondFrac;
       if (pondH < 8 || W < 8) return;
       const y0 = H - pondH;
-      const srcY = Math.max(0, y0 - pondH);
+      const srcH = Math.min(pondH, y0);
+      const srcY = Math.max(0, y0 - srcH);
       ctx.save();
       ctx.beginPath();
       ctx.rect(0, y0, W, pondH);
@@ -1431,13 +1481,13 @@
       try {
         ctx.drawImage(
           canvas,
-          0, srcY * dpr, W * dpr, pondH * dpr,
+          0, srcY * dpr, W * dpr, srcH * dpr,
           0, 0, W, pondH
         );
       } catch (e) { /* ignore rare self-copy quirks */ }
       ctx.restore();
 
-      // Soft fade into water + slight horizon
+      // Soft fade into water + horizon grab line
       const g = ctx.createLinearGradient(0, y0, 0, H);
       g.addColorStop(0, 'rgba(5,8,18,0.08)');
       g.addColorStop(0.22, 'rgba(10,28,48,0.22)');
@@ -1445,8 +1495,12 @@
       g.addColorStop(1, 'rgba(3,8,18,0.78)');
       ctx.fillStyle = g;
       ctx.fillRect(0, y0, W, pondH);
-      ctx.fillStyle = 'rgba(160,200,255,0.12)';
-      ctx.fillRect(0, y0, W, 1.2);
+      ctx.fillStyle = pondDragging ? 'rgba(190,220,255,0.45)' : 'rgba(160,200,255,0.18)';
+      ctx.fillRect(0, y0, W, pondDragging ? 2.4 : 1.4);
+      if (pondDragging) {
+        ctx.fillStyle = 'rgba(180,210,255,0.12)';
+        ctx.fillRect(0, y0 - 10, W, 20);
+      }
     }
     frame(t0);
   </script>
