@@ -304,7 +304,7 @@
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.4.2';
+    const APP_VER = '1.4.3';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -752,8 +752,8 @@
       tiltSmoothX += (tiltTargetX - tiltSmoothX) * k;
       if (Math.abs(tiltSmoothY) < 1e-4) tiltSmoothY = 0;
       if (Math.abs(tiltSmoothX) < 1e-4) tiltSmoothX = 0;
-      // In Launch, most tilt goes to thrust; keep a little view lean for immersion
-      const viewAmt = launchMode ? 0.35 : 1;
+      // Launch: tilt steers physics only — camera stays on rotY/rotX and chase-follows
+      const viewAmt = (launchMode || launchBlend > 0.05) ? 0 : 1;
       viewRotY = rotY + tiltSmoothY * viewAmt;
       viewRotX = clampNum(rotX + tiltSmoothX * viewAmt, -1.45, 1.45);
     }
@@ -793,12 +793,14 @@
         chasePanX = 0; chasePanY = 0;
         showTrails = true;
         setOn($('showTrails'), true);
+        starsOn = true;
+        setOn($('starsOn'), true);
         clearTrails();
         const kick = 2.4;
-        craftVel[0] += Math.sin(viewRotY) * kick;
+        craftVel[0] += Math.sin(rotY) * kick;
         craftVel[1] += 0.35 * kick;
-        craftVel[2] += Math.cos(viewRotY) * kick;
-        showToast('Launch — tilt to steer the flock');
+        craftVel[2] += Math.cos(rotY) * kick;
+        showToast('Launch — tilt steers the flock');
         hideHint(); keepAwake();
       } else {
         launchMode = false;
@@ -818,9 +820,9 @@
         return;
       }
 
-      const cy = Math.cos(viewRotY), sy = Math.sin(viewRotY);
-      const cxr = Math.cos(viewRotX), sx = Math.sin(viewRotX);
-      // camera basis
+      // Thrust in screen axes of the fixed camera (rotY/rotX), not tilt-look
+      const cy = Math.cos(rotY), sy = Math.sin(rotY);
+      const cxr = Math.cos(rotX), sx = Math.sin(rotX);
       const right = [cy, 0, -sy];
       const up = [sy * sx, cxr, cy * sx];
       const forward = [sy * cxr, -sx, cy * cxr];
@@ -888,19 +890,29 @@
         return;
       }
       const flock = [craftPos[0] * lb, craftPos[1] * lb, craftPos[2] * lb];
-      const q = projCore(flock);
-      const ex = q.x - cx, ey = q.y - cy;
-      const follow = Math.min(1, dt * 3.2) * (0.32 + 0.38 * lb);
-      chasePanX += -ex * follow;
-      chasePanY += -ey * follow;
+      // Soft lead so chase stays ahead of motion instead of lagging off-frame
+      const lead = 0.22;
+      const aim = [
+        flock[0] + craftVel[0] * lead * lb,
+        flock[1] + craftVel[1] * lead * lb,
+        flock[2] + craftVel[2] * lead * lb
+      ];
+      const q = projCore(aim);
+      const targetPanX = cx - q.x;
+      const targetPanY = cy - q.y;
+      const follow = Math.min(1, dt * 6.2) * (0.62 + 0.35 * lb);
+      chasePanX += (targetPanX - chasePanX) * follow;
+      chasePanY += (targetPanY - chasePanY) * follow;
 
-      const edge = Math.hypot(ex, ey) / Math.max(1, Math.min(W, H));
-      const tiltMag = Math.hypot(tiltSmoothX, tiltSmoothY);
+      const qNow = projCore(flock);
+      const residual = Math.hypot(qNow.x + chasePanX - cx, qNow.y + chasePanY - cy) / Math.max(1, Math.min(W, H));
+      const dist = Math.hypot(flock[0], flock[1], flock[2]);
       const spd = Math.hypot(craftVel[0], craftVel[1], craftVel[2]) * lb;
-      const zoomPull = 1 + Math.min(0.62, edge * 2.1 + tiltMag * 3.4 + spd * 0.11);
+      // Pull out with travel distance / speed / any leftover off-center; ease in when calm
+      const zoomPull = 1 + Math.min(0.9, dist * 0.06 + residual * 1.6 + spd * 0.09);
       const zoomTarget = clampZoom(launchZoomBase * zoomPull);
       if (launchMode || lb > 0.04) {
-        zoom += (zoomTarget - zoom) * Math.min(1, dt * 1.8);
+        zoom += (zoomTarget - zoom) * Math.min(1, dt * 2.4);
       }
     }
 
@@ -966,6 +978,7 @@
         const d = pinchDist();
         if (pinchStartDist > 8 && d > 8) {
           zoom = clampZoom(pinchStartZoom * (d / pinchStartDist));
+          if (launchMode) launchZoomBase = zoom;
         }
         return;
       }
@@ -1001,6 +1014,7 @@
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
       zoom = clampZoom(zoom * Math.exp(-e.deltaY * 0.00135));
+      if (launchMode) launchZoomBase = zoom;
     }, { passive: false });
 
     let wakeLock = null;
@@ -1011,7 +1025,7 @@
     function hideHint() { hint.classList.add('hide'); }
     setTimeout(hideHint, 5000);
 
-    const stars = Array.from({length:140}, () => [(Math.random()-0.5)*28,(Math.random()-0.5)*28,(Math.random()-0.5)*28]);
+    const stars = Array.from({length:220}, () => [(Math.random()-0.5)*48,(Math.random()-0.5)*48,(Math.random()-0.5)*48]);
     function rnd(a,b){ return a+Math.random()*(b-a); }
     function setSliderSilent(id, v) { const el=$(id); if(!el) return; el.value=v; el.dispatchEvent(new Event('input')); }
     function setCheckSilent(id, on) { const el=$(id); if(!el) return; setOn(el, on); el.dispatchEvent(new Event('change')); }
@@ -1123,6 +1137,8 @@
       if (launchMode || launchBlend > 0.08) {
         showTrails = true;
         setOn($('showTrails'), true);
+        starsOn = true;
+        setOn($('starsOn'), true);
       }
 
       if (ghost > 0.001) { ctx.fillStyle = `rgba(5,5,12,${1-ghost})`; ctx.fillRect(0,0,W,H); }
@@ -1132,7 +1148,8 @@
         for (const s of stars) {
           const q = proj(s);
           const a = 0.25 + 0.55*((s[0]*13.7+s[1]*7.1)%1+1)%1;
-          ctx.fillStyle = `rgba(220,230,255,${a})`; ctx.fillRect(q.x,q.y,1.2,1.2);
+          const sz = (launchBlend > 0.05) ? 1.35 : 1.2;
+          ctx.fillStyle = `rgba(220,230,255,${a})`; ctx.fillRect(q.x,q.y,sz,sz);
         }
       }
       const seg = segCount();

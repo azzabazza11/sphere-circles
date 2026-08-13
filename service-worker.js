@@ -1,4 +1,4 @@
-const CACHE = 'sphere-circles-v1.4.2';
+const CACHE = 'sphere-circles-v1.4.3';
 const ASSETS = [
   './',
   './index.html',
