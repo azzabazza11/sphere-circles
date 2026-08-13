@@ -271,7 +271,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.4.1 · launch · tilt · install · altitude fly · deep zoom · Ko-fi · lit toggles · view lift · normal-integral fly · Share QR · concertina sections · fat sliders · tap jumps flow</div>
+    <div id="ver">v1.4.2 · launch chase · tilt · install · altitude fly · deep zoom · Ko-fi · lit toggles · view lift · normal-integral fly · Share QR · concertina sections · fat sliders · tap jumps flow</div>
   </div>
 
   <div id="qrModal">
@@ -297,13 +297,14 @@
     let flyBlend = 0; // 0 = on sphere, 1 = full fly (smooth settle)
     let launchMode = false, launchBlend = 0;
     let craftPos = [0, 0, 0], craftVel = [0, 0, 0];
+    let launchZoomBase = 280, chasePanX = 0, chasePanY = 0;
     let tiltDiscovered = false;
     try { tiltDiscovered = localStorage.getItem('circles_tilt_discovered') === '1'; } catch (e) {}
     let showEq = true, showDots = true, glow = true, fillOn = false, starsOn = true, autoSpin = true, tiltOn = false;
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.4.1';
+    const APP_VER = '1.4.2';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -687,8 +688,10 @@
       }
       const dBeta = clampNum(beta - tiltBaseBeta, -50, 50);
       const dGamma = clampNum(gamma - tiltBaseGamma, -50, 50);
-      tiltTargetY = dGamma * 0.032;
-      tiltTargetX = dBeta * 0.026;
+      const yawSens = launchMode ? 0.062 : 0.032;
+      const pitchSens = launchMode ? 0.052 : 0.026;
+      tiltTargetY = dGamma * yawSens;
+      tiltTargetX = dBeta * pitchSens;
     }
     function startTiltListen() {
       if (tiltListening) return;
@@ -750,7 +753,7 @@
       if (Math.abs(tiltSmoothY) < 1e-4) tiltSmoothY = 0;
       if (Math.abs(tiltSmoothX) < 1e-4) tiltSmoothX = 0;
       // In Launch, most tilt goes to thrust; keep a little view lean for immersion
-      const viewAmt = launchMode ? 0.22 : 1;
+      const viewAmt = launchMode ? 0.35 : 1;
       viewRotY = rotY + tiltSmoothY * viewAmt;
       viewRotX = clampNum(rotX + tiltSmoothX * viewAmt, -1.45, 1.45);
     }
@@ -786,12 +789,12 @@
         }
         launchMode = true;
         setOn($('launchMode'), true);
-        // Soft peel into free flight; keep trails
+        launchZoomBase = zoom;
+        chasePanX = 0; chasePanY = 0;
         showTrails = true;
         setOn($('showTrails'), true);
         clearTrails();
-        // outward kick so they leave the sphere immediately
-        const kick = 1.8;
+        const kick = 2.4;
         craftVel[0] += Math.sin(viewRotY) * kick;
         craftVel[1] += 0.35 * kick;
         craftVel[2] += Math.cos(viewRotY) * kick;
@@ -822,10 +825,10 @@
       const up = [sy * sx, cxr, cy * sx];
       const forward = [sy * cxr, -sx, cy * cxr];
 
-      const thrust = launchMode ? 8.2 : 0;
-      const tx = tiltSmoothY * thrust;       // roll → strafe
-      const ty = -tiltSmoothX * thrust;      // pitch → surge
-      const tz = (Math.abs(tiltSmoothX) + Math.abs(tiltSmoothY)) * thrust * 0.12;
+      const thrust = launchMode ? 15.5 : 0;
+      const tx = tiltSmoothY * thrust;
+      const ty = -tiltSmoothX * thrust;
+      const tz = (Math.abs(tiltSmoothX) + Math.abs(tiltSmoothY)) * thrust * 0.18;
 
       craftVel[0] += (right[0]*tx + forward[0]*ty + up[0]*tz) * dt;
       craftVel[1] += (right[1]*tx + forward[1]*ty + up[1]*tz) * dt;
@@ -836,7 +839,7 @@
       craftVel[0] *= damp; craftVel[1] *= damp; craftVel[2] *= damp;
 
       const spd = Math.hypot(craftVel[0], craftVel[1], craftVel[2]);
-      const maxSpd = 5.2;
+      const maxSpd = 7.8;
       if (spd > maxSpd) {
         const s = maxSpd / spd;
         craftVel[0] *= s; craftVel[1] *= s; craftVel[2] *= s;
@@ -848,7 +851,7 @@
 
       // soft leash so the flock stays findable
       const dist = Math.hypot(craftPos[0], craftPos[1], craftPos[2]);
-      const leash = 9;
+      const leash = 11;
       if (dist > leash) {
         const excess = (dist - leash) / dist;
         craftPos[0] *= 1 - excess * 0.08;
@@ -868,6 +871,40 @@
     bindCheck('tiltOn', v => { void setTiltEnabled(v); });
     bindCheck('launchMode', v => { void setLaunchEnabled(v); });
     updateLaunchVisibility();
+    if ($('quickLaunch')) {
+      $('quickLaunch').addEventListener('click', e => {
+        e.preventDefault(); e.stopPropagation();
+        void setLaunchEnabled(!launchMode);
+        hideHint(); keepAwake();
+      });
+    }
+    function updateLaunchCamera(dt) {
+      const lb = launchBlend;
+      if (lb < 0.01 && !launchMode) {
+        chasePanX *= 1 - Math.min(1, dt * 3.5);
+        chasePanY *= 1 - Math.min(1, dt * 3.5);
+        if (!launchMode && Math.abs(chasePanX) < 0.5) chasePanX = 0;
+        if (!launchMode && Math.abs(chasePanY) < 0.5) chasePanY = 0;
+        return;
+      }
+      const flock = [craftPos[0] * lb, craftPos[1] * lb, craftPos[2] * lb];
+      const q = projCore(flock);
+      const ex = q.x - cx, ey = q.y - cy;
+      const follow = Math.min(1, dt * 3.2) * (0.32 + 0.38 * lb);
+      chasePanX += -ex * follow;
+      chasePanY += -ey * follow;
+
+      const edge = Math.hypot(ex, ey) / Math.max(1, Math.min(W, H));
+      const tiltMag = Math.hypot(tiltSmoothX, tiltSmoothY);
+      const spd = Math.hypot(craftVel[0], craftVel[1], craftVel[2]) * lb;
+      const zoomPull = 1 + Math.min(0.62, edge * 2.1 + tiltMag * 3.4 + spd * 0.11);
+      const zoomTarget = clampZoom(launchZoomBase * zoomPull);
+      if (launchMode || lb > 0.04) {
+        zoom += (zoomTarget - zoom) * Math.min(1, dt * 1.8);
+      }
+    }
+
+
 
     let W, H, cx, cy, scale, dpr;
     let rotY = 0.7, rotX = 0.32, zoom = 280;
@@ -1025,12 +1062,16 @@
       let x1=x*cy-z*sy, z1=x*sy+z*cy;
       return [x1, y*cxr-z1*sx, y*sx+z1*cxr];
     }
-    function proj(p) {
+    function projCore(p) {
       const [x,y,z]=rot(p);
       const base = zoom/(zoom + z*scale*0.15 + scale);
       const boost = Math.max(1, zoom / 900);
       const s = scale * base * boost;
       return {x: cx+x*s, y: cy-y*s, z, f: base*boost};
+    }
+    function proj(p) {
+      const q = projCore(p);
+      return {x: q.x + chasePanX, y: q.y + chasePanY, z: q.z, f: q.f};
     }
     function add(a,b){ return [a[0]+b[0],a[1]+b[1],a[2]+b[2]]; }
     function segCount(){ if(N>256)return 24; if(N>128)return 36; if(N>64)return 48; return 64; }
@@ -1078,6 +1119,11 @@
       if (autoSpin && !drag && pointers.size < 2 && !tiltOn && !launchMode) rotY += 0.08 * dt;
       updateTiltView(dt);
       updateLaunchPhysics(dt);
+      updateLaunchCamera(dt);
+      if (launchMode || launchBlend > 0.08) {
+        showTrails = true;
+        setOn($('showTrails'), true);
+      }
 
       if (ghost > 0.001) { ctx.fillStyle = `rgba(5,5,12,${1-ghost})`; ctx.fillRect(0,0,W,H); }
       else { ctx.fillStyle = '#05050c'; ctx.fillRect(0,0,W,H); }
