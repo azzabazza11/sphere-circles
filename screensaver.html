@@ -188,6 +188,13 @@
       background: #ff5e5b; color: #fff;
       -webkit-tap-highlight-color: transparent;
     }
+    #qrHub {
+      display: block; width: 100%; margin-top: 8px; border-radius: 10px; padding: 12px 8px;
+      font: 650 13px system-ui, sans-serif; text-align: center; text-decoration: none;
+      background: rgba(127,212,255,0.12); color: #7fd4ff;
+      border: 1px solid rgba(127,212,255,0.28);
+      -webkit-tap-highlight-color: transparent;
+    }
     #hint.hide { opacity: 0; }
   </style>
 </head>
@@ -211,6 +218,7 @@
         <div class="togs">
           <button type="button" class="tog on" id="autoFlow" aria-pressed="true">Auto flow</button>
           <button type="button" class="tog on" id="autoSpin" aria-pressed="true">Orbit</button>
+          <button type="button" class="tog" id="tiltOn" aria-pressed="false">Tilt</button>
         </div>
         <label>Flow spd <input id="flowSpd" type="range" min="0.15" max="2" step="0.01" value="0.5"><span class="val" id="flowSpdVal">0.50</span></label>
       </div>
@@ -252,7 +260,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.3.9 · install · altitude fly · deep zoom · Ko-fi · lit toggles · view lift · normal-integral fly · Share QR · concertina sections · fat sliders · tap jumps flow</div>
+    <div id="ver">v1.4.0 · tilt · install · altitude fly · deep zoom · Ko-fi · lit toggles · view lift · normal-integral fly · Share QR · concertina sections · fat sliders · tap jumps flow</div>
   </div>
 
   <div id="qrModal">
@@ -265,21 +273,22 @@
       </div>
       <button type="button" id="qrInstall">Install app</button>
       <button type="button" id="qrKofi">Support on Ko-fi</button>
+      <a id="qrHub" href="https://azzabazza11.github.io/" target="_blank" rel="noopener noreferrer">More apps →</a>
     </div>
   </div>
 
   <div id="toast"></div>
-  <div id="hint">Flow: one slider wanders · tap canvas to jump slider<br>Pinch zoom · Controls for more</div>
+  <div id="hint">Flow: one slider wanders · tap canvas to jump slider<br>Pinch zoom · Tilt moves the view · Controls for more</div>
   <script>
     const $ = (id) => document.getElementById(id);
     let N = 16, phase = 0.35, rate = 1, twist = 0, drift = 0;
     let flyMode = false, flyAlt = 1.25, flyIn = false, flyVel = false, flyMirror = false, showTrails = true;
     let flyBlend = 0; // 0 = on sphere, 1 = full fly (smooth settle)
-    let showEq = true, showDots = true, glow = true, fillOn = false, starsOn = true, autoSpin = true;
+    let showEq = true, showDots = true, glow = true, fillOn = false, starsOn = true, autoSpin = true, tiltOn = false;
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.3.9';
+    const APP_VER = '1.4.0';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -624,7 +633,96 @@
     }
     rebuildFlyTable();
 
+    bindCheck('tiltOn', v => { void setTiltEnabled(v); });
 
+
+
+
+    // Device tilt → camera look offset (calibrated when enabled; eases out when off)
+    let tiltTargetY = 0, tiltTargetX = 0;
+    let tiltSmoothY = 0, tiltSmoothX = 0;
+    let tiltBaseBeta = null, tiltBaseGamma = null;
+    let tiltListening = false;
+    let viewRotY = 0.7, viewRotX = 0.32;
+    function clampNum(v, a, b) { return Math.max(a, Math.min(b, v)); }
+    function onDeviceOrient(e) {
+      if (!tiltOn) return;
+      let beta = e.beta, gamma = e.gamma;
+      if (beta == null || gamma == null) return;
+      const ang = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+      if (ang === 90) { const t = beta; beta = gamma; gamma = -t; }
+      else if (ang === -90 || ang === 270) { const t = beta; beta = -gamma; gamma = t; }
+      else if (ang === 180) { beta = -beta; gamma = -gamma; }
+      if (tiltBaseBeta == null) {
+        tiltBaseBeta = beta;
+        tiltBaseGamma = gamma;
+      }
+      const dBeta = clampNum(beta - tiltBaseBeta, -50, 50);
+      const dGamma = clampNum(gamma - tiltBaseGamma, -50, 50);
+      tiltTargetY = dGamma * 0.032;
+      tiltTargetX = dBeta * 0.026;
+    }
+    function startTiltListen() {
+      if (tiltListening) return;
+      window.addEventListener('deviceorientation', onDeviceOrient, true);
+      tiltListening = true;
+    }
+    function stopTiltListen() {
+      if (!tiltListening) return;
+      window.removeEventListener('deviceorientation', onDeviceOrient, true);
+      tiltListening = false;
+    }
+    async function setTiltEnabled(on) {
+      if (!on) {
+        tiltOn = false;
+        tiltTargetY = 0; tiltTargetX = 0;
+        tiltBaseBeta = null; tiltBaseGamma = null;
+        stopTiltListen();
+        setOn($('tiltOn'), false);
+        return;
+      }
+      if (typeof DeviceOrientationEvent === 'undefined') {
+        showToast('Tilt not supported on this device');
+        setOn($('tiltOn'), false);
+        tiltOn = false;
+        return;
+      }
+      try {
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+          const res = await DeviceOrientationEvent.requestPermission();
+          if (res !== 'granted') {
+            showToast('Tilt permission denied');
+            setOn($('tiltOn'), false);
+            tiltOn = false;
+            return;
+          }
+        }
+      } catch (err) {
+        showToast('Tilt unavailable');
+        setOn($('tiltOn'), false);
+        tiltOn = false;
+        return;
+      }
+      tiltBaseBeta = null;
+      tiltBaseGamma = null;
+      tiltTargetY = 0; tiltTargetX = 0;
+      tiltSmoothY = 0; tiltSmoothX = 0;
+      tiltOn = true;
+      setOn($('tiltOn'), true);
+      startTiltListen();
+      showToast('Tilt on — move the phone');
+      hideHint(); keepAwake();
+    }
+    function updateTiltView(dt) {
+      const k = Math.min(1, dt * 9);
+      if (!tiltOn) { tiltTargetY = 0; tiltTargetX = 0; }
+      tiltSmoothY += (tiltTargetY - tiltSmoothY) * k;
+      tiltSmoothX += (tiltTargetX - tiltSmoothX) * k;
+      if (Math.abs(tiltSmoothY) < 1e-4) tiltSmoothY = 0;
+      if (Math.abs(tiltSmoothX) < 1e-4) tiltSmoothX = 0;
+      viewRotY = rotY + tiltSmoothY;
+      viewRotX = clampNum(rotX + tiltSmoothX, -1.45, 1.45);
+    }
 
     let W, H, cx, cy, scale, dpr;
     let rotY = 0.7, rotX = 0.32, zoom = 280;
@@ -693,6 +791,7 @@
       rotY += (x - lx) * 0.008;
       rotX = Math.max(-1.4, Math.min(1.4, rotX + (y - ly) * 0.008));
       lx = x; ly = y;
+      if (tiltOn) { tiltBaseBeta = null; tiltBaseGamma = null; tiltSmoothY = 0; tiltSmoothX = 0; tiltTargetY = 0; tiltTargetX = 0; }
     }
     function onUp(id) {
       if (tapInfo && tapInfo.id === id && pointers.size === 1) {
@@ -777,7 +876,7 @@
 
     function rot(p) {
       let [x,y,z]=p;
-      const cy=Math.cos(rotY), sy=Math.sin(rotY), cxr=Math.cos(rotX), sx=Math.sin(rotX);
+      const cy=Math.cos(viewRotY), sy=Math.sin(viewRotY), cxr=Math.cos(viewRotX), sx=Math.sin(viewRotX);
       let x1=x*cy-z*sy, z1=x*sy+z*cy;
       return [x1, y*cxr-z1*sx, y*sx+z1*cxr];
     }
@@ -831,7 +930,8 @@
       flyBlend += (flyTarget - flyBlend) * Math.min(1, dt * 2.2);
       if (Math.abs(flyBlend - flyTarget) < 0.001) flyBlend = flyTarget;
       const baseT = (simTime * rate) / CYCLE;
-      if (autoSpin && !drag && pointers.size < 2) rotY += 0.08 * dt;
+      if (autoSpin && !drag && pointers.size < 2 && !tiltOn) rotY += 0.08 * dt;
+      updateTiltView(dt);
 
       if (ghost > 0.001) { ctx.fillStyle = `rgba(5,5,12,${1-ghost})`; ctx.fillRect(0,0,W,H); }
       else { ctx.fillStyle = '#05050c'; ctx.fillRect(0,0,W,H); }
