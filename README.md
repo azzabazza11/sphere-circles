@@ -5,7 +5,7 @@ Animated tangential circles on a sphere — desktop playground + phone screensav
 ## Live
 
 - Desktop: https://azzabazza11.github.io/sphere-circles/
-- Screensaver: https://azzabazza11.github.io/sphere-circles/screensaver.html?v=1.3.8
+- Screensaver: https://azzabazza11.github.io/sphere-circles/screensaver.html?v=1.3.9
 
 ## Local
 
@@ -30,3 +30,4 @@ Open http://localhost:8080/
 - Phone screensaver: fullscreen-friendly, pinch-zoom, wake lock, Controls FAB
 - **Share** — QR + copy link for the current page, plus **Support on Ko-fi**
 - Hard **Reload** clears service worker + caches so updates stick
+- **Install app** on mobile (Add to Home Screen / PWA install)

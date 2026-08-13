@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#05050c">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icon.svg">
+  <link rel="icon" href="icon-192.png">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <title>Sphere + Tangential Circles</title>
   <style>
     * { margin: 0; box-sizing: border-box; }
@@ -119,6 +121,31 @@
       background: #ff5e5b; color: #fff;
       -webkit-tap-highlight-color: transparent;
     }
+
+    #installBtn {
+      background: rgba(255,204,68,0.18); color: #ffe9a8;
+      border: 1px solid rgba(255,204,68,0.4) !important;
+    }
+    #installBtn[hidden] { display: none !important; }
+    #qrInstall {
+      width: 100%; margin-top: 8px; border: 0; border-radius: 10px; padding: 12px 8px;
+      font: 650 14px system-ui, sans-serif; cursor: pointer;
+      background: rgba(255,204,68,0.2); color: #ffe9a8;
+      border: 1px solid rgba(255,204,68,0.45);
+      -webkit-tap-highlight-color: transparent;
+    }
+    #qrInstall[hidden] { display: none !important; }
+    #toast {
+      position: fixed; left: 50%; bottom: max(88px, env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      z-index: 30; max-width: min(92vw, 340px);
+      padding: 12px 16px; border-radius: 12px;
+      background: rgba(16,20,30,0.94); color: #e8eef8;
+      border: 1px solid rgba(255,255,255,0.12);
+      font: 600 13px system-ui, sans-serif; text-align: center;
+      opacity: 0; pointer-events: none; transition: opacity .2s ease;
+    }
+    #toast.show { opacity: 1; }
     #hint { color: #889; font-size: 10px; margin-top: 10px; line-height: 1.4; }
     #quick {
       position: fixed; left: 16px; bottom: 16px; z-index: 3;
@@ -202,6 +229,7 @@
     </div>
     <div class="actions" style="display:flex;gap:8px;margin-top:12px">
       <button id="shareBtn" type="button" style="flex:1;border:1px solid rgba(127,212,255,0.35);border-radius:10px;padding:12px 8px;background:rgba(127,212,255,0.18);color:#cfefff;font:650 13px system-ui,sans-serif;cursor:pointer">Share QR</button>
+      <button id="installBtn" type="button" style="flex:1;border:1px solid rgba(255,204,68,0.4);border-radius:10px;padding:12px 8px;background:rgba(255,204,68,0.18);color:#ffe9a8;font:650 13px system-ui,sans-serif;cursor:pointer">Install</button>
     </div>
     <p id="hint">Flow wanders one slider at a time (tap canvas to jump). Concertina sections · fat sliders.</p>
   </div>
@@ -218,10 +246,12 @@
         <button type="button" id="qrCopy">Copy link</button>
         <button type="button" id="qrClose">Close</button>
       </div>
+      <button type="button" id="qrInstall">Install app</button>
       <button type="button" id="qrKofi">Support on Ko-fi</button>
     </div>
   </div>
 
+  <div id="toast"></div>
   <canvas id="c"></canvas>
   <script>
     const canvas = document.getElementById('c');
@@ -727,7 +757,7 @@
     syncQuick();
     frame(t0);
 
-    const APP_VER = '1.3.8';
+    const APP_VER = '1.3.9';
     function shareUrl() {
       try {
         const u = new URL(location.href);
@@ -796,6 +826,71 @@
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./service-worker.js?v=' + APP_VER).catch(() => {});
     }
+
+    const INSTALL_HINT_IOS = 'On iPhone: tap Share, then Add to Home Screen.';
+    let deferredInstallPrompt = null;
+    function isStandaloneDisplay() {
+      return !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+        window.navigator.standalone === true;
+    }
+    function isIosLike() {
+      const ua = navigator.userAgent || '';
+      return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    }
+    function showToast(msg) {
+      const el = $('toast');
+      if (!el) { try { alert(msg); } catch (e) {} return; }
+      el.textContent = msg;
+      el.classList.add('show');
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => el.classList.remove('show'), 3200);
+    }
+    function updateInstallButton() {
+      const btns = [$('installBtn'), $('qrInstall')].filter(Boolean);
+      if (!btns.length) return;
+      if (isStandaloneDisplay()) {
+        btns.forEach(b => { b.hidden = true; });
+        return;
+      }
+      btns.forEach(b => {
+        b.hidden = false;
+        b.textContent = deferredInstallPrompt ? 'Install app' : (isIosLike() ? 'Add to Home Screen' : 'Install app');
+      });
+    }
+    async function promptInstallApp() {
+      if (isStandaloneDisplay()) {
+        showToast('Already installed');
+        return;
+      }
+      if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        try { await deferredInstallPrompt.userChoice; } catch (e) {}
+        deferredInstallPrompt = null;
+        updateInstallButton();
+        return;
+      }
+      showToast(isIosLike() ? INSTALL_HINT_IOS : 'Use your browser menu → Install app / Add to Home screen');
+    }
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      updateInstallButton();
+    });
+    window.addEventListener('appinstalled', () => {
+      deferredInstallPrompt = null;
+      updateInstallButton();
+      showToast('Installed');
+    });
+    if ($('installBtn')) $('installBtn').addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      promptInstallApp();
+    });
+    if ($('qrInstall')) $('qrInstall').addEventListener('click', e => {
+      e.preventDefault(); e.stopPropagation();
+      promptInstallApp();
+    });
+    updateInstallButton();
+
   </script>
 </body>
 </html>

@@ -1,10 +1,12 @@
-const CACHE = 'sphere-circles-v1.3.8';
+const CACHE = 'sphere-circles-v1.3.9';
 const ASSETS = [
   './',
   './index.html',
   './screensaver.html',
   './manifest.webmanifest',
-  './icon.svg'
+  './icon.svg',
+  './icon-192.png',
+  './icon-512.png'
 ];
 
 self.addEventListener('install', event => {
