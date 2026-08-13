@@ -53,6 +53,15 @@
       border: 1px solid rgba(255,204,68,0.4) !important;
     }
     #installBtn[hidden] { display: none !important; }
+    #launchMode, #quickLaunch {
+      background: rgba(255,102,136,0.16); color: #ffb3c4;
+      border: 1px solid rgba(255,102,136,0.45) !important;
+    }
+    #launchMode.on, #quickLaunch.on {
+      color: #2a0610; background: #ff6688; border-color: #ff99aa !important;
+      box-shadow: 0 0 16px rgba(255,102,136,0.35);
+    }
+    #launchMode[hidden], #quickLaunch[hidden] { display: none !important; }
     #qrInstall {
       width: 100%; margin-top: 8px; border: 0; border-radius: 10px; padding: 12px 8px;
       font: 650 14px system-ui, sans-serif; cursor: pointer;
@@ -205,6 +214,7 @@
   <div id="quick">
     <button type="button" id="quickFly">Fly</button>
     <button type="button" id="quickFlow" class="on">Flow</button>
+    <button type="button" id="quickLaunch" hidden>Launch</button>
   </div>
   <div id="panel">
     <div class="acc open" data-acc>
@@ -219,6 +229,7 @@
           <button type="button" class="tog on" id="autoFlow" aria-pressed="true">Auto flow</button>
           <button type="button" class="tog on" id="autoSpin" aria-pressed="true">Orbit</button>
           <button type="button" class="tog" id="tiltOn" aria-pressed="false">Tilt</button>
+          <button type="button" class="tog" id="launchMode" aria-pressed="false" hidden>Launch</button>
         </div>
         <label>Flow spd <input id="flowSpd" type="range" min="0.15" max="2" step="0.01" value="0.5"><span class="val" id="flowSpdVal">0.50</span></label>
       </div>
@@ -260,7 +271,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.4.0 · tilt · install · altitude fly · deep zoom · Ko-fi · lit toggles · view lift · normal-integral fly · Share QR · concertina sections · fat sliders · tap jumps flow</div>
+    <div id="ver">v1.4.1 · launch · tilt · install · altitude fly · deep zoom · Ko-fi · lit toggles · view lift · normal-integral fly · Share QR · concertina sections · fat sliders · tap jumps flow</div>
   </div>
 
   <div id="qrModal">
@@ -278,17 +289,21 @@
   </div>
 
   <div id="toast"></div>
-  <div id="hint">Flow: one slider wanders · tap canvas to jump slider<br>Pinch zoom · Tilt moves the view · Controls for more</div>
+  <div id="hint">Flow · Pinch · Tilt steers the view · Launch (after Tilt) flies the flock<br>Controls for more</div>
   <script>
     const $ = (id) => document.getElementById(id);
     let N = 16, phase = 0.35, rate = 1, twist = 0, drift = 0;
     let flyMode = false, flyAlt = 1.25, flyIn = false, flyVel = false, flyMirror = false, showTrails = true;
     let flyBlend = 0; // 0 = on sphere, 1 = full fly (smooth settle)
+    let launchMode = false, launchBlend = 0;
+    let craftPos = [0, 0, 0], craftVel = [0, 0, 0];
+    let tiltDiscovered = false;
+    try { tiltDiscovered = localStorage.getItem('circles_tilt_discovered') === '1'; } catch (e) {}
     let showEq = true, showDots = true, glow = true, fillOn = false, starsOn = true, autoSpin = true, tiltOn = false;
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.4.0';
+    const APP_VER = '1.4.1';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -413,9 +428,15 @@
     });
 
     function syncQuick() {
-      const qf = $('quickFly'), qo = $('quickFlow');
+      const qf = $('quickFly'), qo = $('quickFlow'), ql = $('quickLaunch');
       if (qf) qf.classList.toggle('on', !!flyMode);
       if (qo) qo.classList.toggle('on', !!autoFlow);
+      if (ql) {
+        ql.hidden = !tiltDiscovered;
+        ql.classList.toggle('on', !!launchMode);
+      }
+      const lb = $('launchMode');
+      if (lb) lb.classList.toggle('on', !!launchMode);
     }
 
     function isOn(el) { return !!(el && el.classList.contains('on')); }
@@ -510,6 +531,14 @@
       promptInstallApp();
     });
     updateInstallButton();
+
+    try {
+      if (new URLSearchParams(location.search).get('install') === '1') {
+        const tryInstall = () => promptInstallApp();
+        window.addEventListener('beforeinstallprompt', () => setTimeout(tryInstall, 50), { once: true });
+        setTimeout(tryInstall, 600);
+      }
+    } catch (e) {}
 
 
     let controlsReady = false;
@@ -709,21 +738,140 @@
       tiltOn = true;
       setOn($('tiltOn'), true);
       startTiltListen();
+      markTiltDiscovered();
       showToast('Tilt on — move the phone');
       hideHint(); keepAwake();
     }
     function updateTiltView(dt) {
       const k = Math.min(1, dt * 9);
-      if (!tiltOn) { tiltTargetY = 0; tiltTargetX = 0; }
+      if (!tiltOn && !launchMode) { tiltTargetY = 0; tiltTargetX = 0; }
       tiltSmoothY += (tiltTargetY - tiltSmoothY) * k;
       tiltSmoothX += (tiltTargetX - tiltSmoothX) * k;
       if (Math.abs(tiltSmoothY) < 1e-4) tiltSmoothY = 0;
       if (Math.abs(tiltSmoothX) < 1e-4) tiltSmoothX = 0;
-      viewRotY = rotY + tiltSmoothY;
-      viewRotX = clampNum(rotX + tiltSmoothX, -1.45, 1.45);
+      // In Launch, most tilt goes to thrust; keep a little view lean for immersion
+      const viewAmt = launchMode ? 0.22 : 1;
+      viewRotY = rotY + tiltSmoothY * viewAmt;
+      viewRotX = clampNum(rotX + tiltSmoothX * viewAmt, -1.45, 1.45);
+    }
+
+    function markTiltDiscovered() {
+      if (tiltDiscovered) { updateLaunchVisibility(); return; }
+      tiltDiscovered = true;
+      try { localStorage.setItem('circles_tilt_discovered', '1'); } catch (e) {}
+      updateLaunchVisibility();
+      showToast('Launch unlocked');
+    }
+    function updateLaunchVisibility() {
+      const b = $('launchMode'), q = $('quickLaunch');
+      if (b) b.hidden = !tiltDiscovered;
+      if (q) q.hidden = !tiltDiscovered;
+    }
+    async function setLaunchEnabled(on) {
+      if (on) {
+        if (!tiltDiscovered) {
+          showToast('Turn on Tilt first to unlock Launch');
+          setOn($('launchMode'), false);
+          launchMode = false;
+          return;
+        }
+        // Launch needs live tilt input
+        if (!tiltOn) {
+          await setTiltEnabled(true);
+          if (!tiltOn) {
+            setOn($('launchMode'), false);
+            launchMode = false;
+            return;
+          }
+        }
+        launchMode = true;
+        setOn($('launchMode'), true);
+        // Soft peel into free flight; keep trails
+        if (!flyMode) {
+          // nudge fly blend path without forcing the Fly toggle UI if user prefers
+        }
+        setCheckSilent && null;
+        showTrails = true;
+        setOn($('showTrails'), true);
+        clearTrails();
+        // outward kick so they leave the sphere immediately
+        const kick = 1.8;
+        craftVel[0] += Math.sin(viewRotY) * kick;
+        craftVel[1] += 0.35 * kick;
+        craftVel[2] += Math.cos(viewRotY) * kick;
+        showToast('Launch — tilt to steer the flock');
+        hideHint(); keepAwake();
+      } else {
+        launchMode = false;
+        setOn($('launchMode'), false);
+        showToast('Returning home');
+      }
+      syncQuick();
+    }
+    function updateLaunchPhysics(dt) {
+      const target = launchMode ? 1 : 0;
+      launchBlend += (target - launchBlend) * Math.min(1, dt * 1.7);
+      if (Math.abs(launchBlend - target) < 0.001) launchBlend = target;
+
+      if (launchBlend < 1e-4 && !launchMode) {
+        craftPos[0] = craftPos[1] = craftPos[2] = 0;
+        craftVel[0] = craftVel[1] = craftVel[2] = 0;
+        return;
+      }
+
+      const cy = Math.cos(viewRotY), sy = Math.sin(viewRotY);
+      const cxr = Math.cos(viewRotX), sx = Math.sin(viewRotX);
+      // camera basis
+      const right = [cy, 0, -sy];
+      const up = [sy * sx, cxr, cy * sx];
+      const forward = [sy * cxr, -sx, cy * cxr];
+
+      const thrust = launchMode ? 8.2 : 0;
+      const tx = tiltSmoothY * thrust;       // roll → strafe
+      const ty = -tiltSmoothX * thrust;      // pitch → surge
+      const tz = (Math.abs(tiltSmoothX) + Math.abs(tiltSmoothY)) * thrust * 0.12;
+
+      craftVel[0] += (right[0]*tx + forward[0]*ty + up[0]*tz) * dt;
+      craftVel[1] += (right[1]*tx + forward[1]*ty + up[1]*tz) * dt;
+      craftVel[2] += (right[2]*tx + forward[2]*ty + up[2]*tz) * dt;
+
+      // drag
+      const damp = Math.pow(launchMode ? 0.92 : 0.84, dt * 60);
+      craftVel[0] *= damp; craftVel[1] *= damp; craftVel[2] *= damp;
+
+      const spd = Math.hypot(craftVel[0], craftVel[1], craftVel[2]);
+      const maxSpd = 5.2;
+      if (spd > maxSpd) {
+        const s = maxSpd / spd;
+        craftVel[0] *= s; craftVel[1] *= s; craftVel[2] *= s;
+      }
+
+      craftPos[0] += craftVel[0] * dt;
+      craftPos[1] += craftVel[1] * dt;
+      craftPos[2] += craftVel[2] * dt;
+
+      // soft leash so the flock stays findable
+      const dist = Math.hypot(craftPos[0], craftPos[1], craftPos[2]);
+      const leash = 9;
+      if (dist > leash) {
+        const excess = (dist - leash) / dist;
+        craftPos[0] *= 1 - excess * 0.08;
+        craftPos[1] *= 1 - excess * 0.08;
+        craftPos[2] *= 1 - excess * 0.08;
+        craftVel[0] *= 0.96; craftVel[1] *= 0.96; craftVel[2] *= 0.96;
+      }
+
+      if (!launchMode) {
+        // spring home when disengaging
+        craftVel[0] += -craftPos[0] * 2.8 * dt;
+        craftVel[1] += -craftPos[1] * 2.8 * dt;
+        craftVel[2] += -craftPos[2] * 2.8 * dt;
+      }
     }
 
     bindCheck('tiltOn', v => { void setTiltEnabled(v); });
+    bindCheck('launchMode', v => { void setLaunchEnabled(v); });
+    updateLaunchVisibility();
 
     let W, H, cx, cy, scale, dpr;
     let rotY = 0.7, rotX = 0.32, zoom = 280;
@@ -931,8 +1079,9 @@
       flyBlend += (flyTarget - flyBlend) * Math.min(1, dt * 2.2);
       if (Math.abs(flyBlend - flyTarget) < 0.001) flyBlend = flyTarget;
       const baseT = (simTime * rate) / CYCLE;
-      if (autoSpin && !drag && pointers.size < 2 && !tiltOn) rotY += 0.08 * dt;
+      if (autoSpin && !drag && pointers.size < 2 && !tiltOn && !launchMode) rotY += 0.08 * dt;
       updateTiltView(dt);
+      updateLaunchPhysics(dt);
 
       if (ghost > 0.001) { ctx.fillStyle = `rgba(5,5,12,${1-ghost})`; ctx.fillRect(0,0,W,H); }
       else { ctx.fillStyle = '#05050c'; ctx.fillRect(0,0,W,H); }
@@ -947,10 +1096,13 @@
       const seg = segCount();
       const doGlow = glow && N <= 140;
       const doDots = showDots && N <= 180;
-      const doTrails = flyBlend > 0.04 && showTrails && N <= 64;
-      if (showEq) strokePts(circlePts([0,1,0], Math.PI/2, [0,0,0], 48), 'rgba(255,210,80,0.85)', 2);
+      const doTrails = (flyBlend > 0.04 || launchBlend > 0.04) && showTrails && N <= 64;
+      // Equator stays as a home beacon (no craft offset)
+      if (showEq) strokePts(circlePts([0,1,0], Math.PI/2, [0,0,0], 48), 'rgba(255,210,80,' + (0.85 * (1 - 0.55 * launchBlend)) + ')', 2);
 
       const hueNow = hue0 + simTime * hueSpd;
+      const lb = launchBlend;
+      const craft = [craftPos[0] * lb, craftPos[1] * lb, craftPos[2] * lb];
       const items = [];
       for (let k = 0; k < N; k++) {
         const stagger = N > 1 ? (phase * k) / N : 0;
@@ -959,8 +1111,13 @@
         const lon = (2*Math.PI*k)/N + simTime*drift + twist*beta;
         const cl = Math.cos(lon), sl = Math.sin(lon);
         const n = [Math.cos(beta)*cl, Math.sin(beta), Math.cos(beta)*sl];
-        const off = flyOffset(tk, lon, k);
-        const center = add([R*Math.cos(rho)*n[0], R*Math.cos(rho)*n[1], R*Math.cos(rho)*n[2]], off);
+        const flyOff = flyOffset(tk, lon, k);
+        // Launch peels the flock off the sphere along each plane normal, then craft carries them
+        const peelAmt = lb * (1.35 + 0.9 * Math.sin(rho));
+        const peel = [n[0] * peelAmt, n[1] * peelAmt, n[2] * peelAmt];
+        const off = add(add(flyOff, peel), craft);
+        const surf = [R*Math.cos(rho)*n[0], R*Math.cos(rho)*n[1], R*Math.cos(rho)*n[2]];
+        const center = add(surf, off);
         items.push({ k, rho, n, off, center, T:[R*cl,0,R*sl], cz: rot(center)[2] });
       }
       if (N <= 200) items.sort((a,b)=>a.cz-b.cz);

@@ -1,8 +1,8 @@
 {
-  "name": "Circle Sphere Screensaver",
+  "name": "Sphere Circles",
   "short_name": "Circles",
-  "description": "Animated tangential circles on a sphere — phone screensaver",
-  "start_url": "./screensaver.html?v=1.4.0",
+  "description": "Animated tangential circles on a sphere — touch-friendly phone app",
+  "start_url": "./screensaver.html?v=1.4.1",
   "scope": "./",
   "display": "fullscreen",
   "orientation": "any",
