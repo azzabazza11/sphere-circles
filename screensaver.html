@@ -633,7 +633,6 @@
     }
     rebuildFlyTable();
 
-    bindCheck('tiltOn', v => { void setTiltEnabled(v); });
 
 
 
@@ -723,6 +722,8 @@
       viewRotY = rotY + tiltSmoothY;
       viewRotX = clampNum(rotX + tiltSmoothX, -1.45, 1.45);
     }
+
+    bindCheck('tiltOn', v => { void setTiltEnabled(v); });
 
     let W, H, cx, cy, scale, dpr;
     let rotY = 0.7, rotX = 0.32, zoom = 280;
