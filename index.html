@@ -238,7 +238,7 @@
       <button id="shareBtn" type="button" style="flex:1;border:1px solid rgba(127,212,255,0.35);border-radius:10px;padding:12px 8px;background:rgba(127,212,255,0.18);color:#cfefff;font:650 13px system-ui,sans-serif;cursor:pointer">Share QR</button>
       <button id="installBtn" type="button" style="flex:1;border:1px solid rgba(255,204,68,0.4);border-radius:10px;padding:12px 8px;background:rgba(255,204,68,0.18);color:#ffe9a8;font:650 13px system-ui,sans-serif;cursor:pointer">Install</button>
     </div>
-    <p id="hint">Flow wanders one slider at a time (tap canvas to jump). Concertina sections · fat sliders.</p>
+    <p id="hint">Auto flow wanders 1–3 controls on its own (varying rates & holds). Concertina sections · fat sliders.</p>
   </div>
   <div id="quick">
     <button type="button" id="quickFly">Fly</button>
@@ -536,26 +536,83 @@
       { key:'fillAmt', min:0, max:0.35, get:()=>fillAmt, set:v=>{ fillAmt=v; setSlider('fillAmt', v, true); } },
       { key:'flyAlt', min:0, max:3.5, get:()=>flyAlt, set:v=>{ flyAlt=v; setSlider('flyAlt', v, true); } }
     ];
-    var flowKey = null, flowDir = 1, flowHold = 0;
+    let flowVoices = [];
+    let flowSceneHold = 0;
+    let flowTargetVoices = 1;
+
+    function makeFlowVoice(avoidKeys) {
+      const pool = FLOW_SLIDERS.filter(s => !avoidKeys.has(s.key));
+      const s = (pool.length ? pool : FLOW_SLIDERS)[Math.floor(Math.random() * (pool.length || FLOW_SLIDERS.length))];
+      let spd;
+      const roll = Math.random();
+      if (roll < 0.08) spd = 0;
+      else if (roll < 0.28) spd = rnd(0.12, 0.4);
+      else if (roll < 0.82) spd = rnd(0.55, 1.6);
+      else spd = rnd(2.0, 4.2);
+      return {
+        key: s.key,
+        dir: Math.random() < 0.5 ? -1 : 1,
+        spd,
+        hold: spd === 0 ? rnd(1.2, 4.5) : rnd(2.0, 18)
+      };
+    }
+    function refreshFlowScene() {
+      const r = Math.random();
+      flowTargetVoices = r < 0.48 ? 1 : (r < 0.82 ? 2 : 3);
+      flowSceneHold = rnd(7, 26);
+    }
     function pickFlowSlider() {
-      const pool = FLOW_SLIDERS.filter(s => s.key !== flowKey);
-      const s = pool[Math.floor(Math.random() * pool.length)] || FLOW_SLIDERS[0];
-      flowKey = s.key;
-      flowDir = Math.random() < 0.5 ? -1 : 1;
-      flowHold = rnd(2.5, 20);
+      refreshFlowScene();
+      flowVoices = [];
+      const avoid = new Set();
+      for (let i = 0; i < flowTargetVoices; i++) {
+        const v = makeFlowVoice(avoid);
+        avoid.add(v.key);
+        flowVoices.push(v);
+      }
     }
     function tickFlow(dt) {
       if (!autoFlow || paused) return;
-      flowHold -= dt;
-      if (!flowKey || flowHold <= 0) pickFlowSlider();
-      const s = FLOW_SLIDERS.find(x => x.key === flowKey);
-      if (!s) return;
-      const span = Math.max(1e-6, s.max - s.min);
-      let next = s.get() + flowDir * span * (0.035 * flowSpd) * dt;
-      if (next >= s.max) { next = s.max; flowDir = -1; }
-      if (next <= s.min) { next = s.min; flowDir = 1; }
-      if (s.int) next = Math.round(next);
-      s.set(next);
+      if (!flowVoices.length) pickFlowSlider();
+      flowSceneHold -= dt;
+      if (flowSceneHold <= 0) {
+        refreshFlowScene();
+        while (flowVoices.length > flowTargetVoices) flowVoices.pop();
+        const avoid = new Set(flowVoices.map(v => v.key));
+        while (flowVoices.length < flowTargetVoices) {
+          const v = makeFlowVoice(avoid);
+          avoid.add(v.key);
+          flowVoices.push(v);
+        }
+        if (flowVoices.length && Math.random() < 0.45) {
+          const i = Math.floor(Math.random() * flowVoices.length);
+          avoid.delete(flowVoices[i].key);
+          const v = makeFlowVoice(avoid);
+          flowVoices[i] = v;
+        }
+      }
+      for (const voice of flowVoices) {
+        voice.hold -= dt;
+        if (voice.hold <= 0) {
+          const avoid = new Set(flowVoices.map(v => v.key));
+          avoid.delete(voice.key);
+          const next = makeFlowVoice(avoid);
+          voice.key = next.key; voice.dir = next.dir; voice.spd = next.spd; voice.hold = next.hold;
+        }
+        if (voice.spd <= 1e-6) continue;
+        const s = FLOW_SLIDERS.find(x => x.key === voice.key);
+        if (!s) continue;
+        const span = Math.max(1e-6, s.max - s.min);
+        let next = s.get() + voice.dir * span * (0.03 * flowSpd * voice.spd) * dt;
+        if (next >= s.max) { next = s.max; voice.dir = -1; }
+        if (next <= s.min) { next = s.min; voice.dir = 1; }
+        if (s.int) next = Math.round(next);
+        s.set(next);
+        if (Math.random() < dt * 0.04) {
+          if (Math.random() < 0.5) voice.dir *= -1;
+          else voice.spd = Math.max(0.12, Math.min(4.2, voice.spd * rnd(0.55, 1.7)));
+        }
+      }
     }
 
     let W, H, cx, cy, scale;
@@ -567,19 +624,10 @@
     }
     resize();
     addEventListener('resize', resize);
-    let tapInfo = null;
     canvas.addEventListener('mousedown', e => {
       drag = true; lx = e.clientX; ly = e.clientY;
-      tapInfo = { x: e.clientX, y: e.clientY, t: performance.now() };
     });
-    addEventListener('mouseup', e => {
-      if (tapInfo && autoFlow) {
-        const dt = performance.now() - tapInfo.t;
-        const dist = Math.hypot(e.clientX - tapInfo.x, e.clientY - tapInfo.y);
-        if (dt < 280 && dist < 14) pickFlowSlider();
-      }
-      tapInfo = null; drag = false;
-    });
+    addEventListener('mouseup', () => { drag = false; });
     addEventListener('mousemove', e => {
       if (!drag) return;
       rotY += (e.clientX - lx) * 0.008;
@@ -763,9 +811,10 @@
     }
     controlsReady = true;
     syncQuick();
+    if (autoFlow) pickFlowSlider();
     frame(t0);
 
-    const APP_VER = '1.4.3';
+    const APP_VER = '1.4.4';
     function shareUrl() {
       try {
         const u = new URL(location.href);
