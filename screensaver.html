@@ -222,7 +222,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.3.6 · Ko-fi · lit toggles · view lift · normal-integral fly · Share QR · concertina sections · fat sliders · tap jumps flow</div>
+    <div id="ver">v1.3.7 · deep zoom · Ko-fi · lit toggles · view lift · normal-integral fly · Share QR · concertina sections · fat sliders · tap jumps flow</div>
   </div>
 
   <div id="qrModal">
@@ -247,7 +247,7 @@
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.3.6';
+    const APP_VER = '1.3.7';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -506,6 +506,8 @@
 
     let W, H, cx, cy, scale, dpr;
     let rotY = 0.7, rotX = 0.32, zoom = 280;
+    const ZOOM_MIN = 50, ZOOM_MAX = 16000, ZOOM_REF = 280;
+    function clampZoom(z) { return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z)); }
     let drag = false, lx = 0, ly = 0, pointers = new Map();
     let pinchStartDist = 0, pinchStartZoom = 280;
     let viewLift = 0;   // 0 = centered, 1 = raised above controls
@@ -561,7 +563,7 @@
       if (pointers.size >= 2) {
         const d = pinchDist();
         if (pinchStartDist > 8 && d > 8) {
-          zoom = Math.max(40, Math.min(2000, pinchStartZoom * (d / pinchStartDist)));
+          zoom = clampZoom(pinchStartZoom * (d / pinchStartDist));
         }
         return;
       }
@@ -595,7 +597,7 @@
     canvas.addEventListener('pointercancel', e => onUp(e.pointerId));
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
-      zoom = Math.max(40, Math.min(2000, zoom - e.deltaY * 0.45));
+      zoom = clampZoom(zoom * Math.exp(-e.deltaY * 0.00135));
     }, { passive: false });
 
     let wakeLock = null;
@@ -659,8 +661,10 @@
     }
     function proj(p) {
       const [x,y,z]=rot(p);
-      const f = zoom/(zoom + z*scale*0.15 + scale);
-      return {x: cx+x*scale*f, y: cy-y*scale*f, z, f};
+      const base = zoom/(zoom + z*scale*0.15 + scale);
+      const boost = Math.max(1, zoom / 900);
+      const s = scale * base * boost;
+      return {x: cx+x*s, y: cy-y*s, z, f: base*boost};
     }
     function add(a,b){ return [a[0]+b[0],a[1]+b[1],a[2]+b[2]]; }
     function segCount(){ if(N>256)return 24; if(N>128)return 36; if(N>64)return 48; return 64; }

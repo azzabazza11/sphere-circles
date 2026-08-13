@@ -522,11 +522,14 @@
       rotX = Math.max(-1.4, Math.min(1.4, rotX + (e.clientY - ly) * 0.008));
       lx = e.clientX; ly = e.clientY;
     });
+    const ZOOM_MIN = 50, ZOOM_MAX = 16000, ZOOM_REF = 300;
+    function clampZoom(z) { return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z)); }
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
-      zoom = Math.max(40, Math.min(2000, zoom - e.deltaY * 0.45));
+      // Exponential zoom so scrolling still works when already close
+      zoom = clampZoom(zoom * Math.exp(-e.deltaY * 0.00135));
     }, { passive: false });
-    canvas.addEventListener('dblclick', () => { rotY = 0.7; rotX = 0.32; zoom = 300; });
+    canvas.addEventListener('dblclick', () => { rotY = 0.7; rotX = 0.32; zoom = ZOOM_REF; });
 
     const stars = Array.from({ length: 180 }, () => [(Math.random()-0.5)*28,(Math.random()-0.5)*28,(Math.random()-0.5)*28]);
     function rot(p) {
@@ -538,8 +541,11 @@
     }
     function proj(p) {
       const [x, y, z] = rot(p);
-      const f = zoom / (zoom + z * scale * 0.15 + scale);
-      return { x: cx + x * scale * f, y: cy - y * scale * f, z, f };
+      // Same perspective curve as before near default zoom; boost >1 lets us push past the old size ceiling
+      const base = zoom / (zoom + z * scale * 0.15 + scale);
+      const boost = Math.max(1, zoom / 900);
+      const s = scale * base * boost;
+      return { x: cx + x * s, y: cy - y * s, z, f: base * boost };
     }
     function add(a, b) { return [a[0]+b[0], a[1]+b[1], a[2]+b[2]]; }
     function segCount() {
@@ -695,7 +701,7 @@
     syncQuick();
     frame(t0);
 
-    const APP_VER = '1.3.6';
+    const APP_VER = '1.3.7';
     function shareUrl() {
       try {
         const u = new URL(location.href);
