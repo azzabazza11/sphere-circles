@@ -178,6 +178,7 @@
       position: relative;
       display: flex; align-items: center; justify-content: center;
       min-height: 44px;
+      touch-action: none;
     }
     .stick-knob {
       position: absolute; left: 50%; top: 50%;
@@ -343,7 +344,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.5.1 · Look dock trial · Ghost stick · two-tier UI</div>
+    <div id="ver">v1.5.2 · Look dock trial · Ghost stick · two-tier UI</div>
   </div>
 
   <div id="qrModal">
@@ -386,7 +387,7 @@
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.5.1';
+    const APP_VER = '1.5.2';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -1311,8 +1312,8 @@
     function setSliderSilent(id, v) { const el=$(id); if(!el) return; el.value=v; el.dispatchEvent(new Event('input')); }
     function setCheckSilent(id, on) { const el=$(id); if(!el) return; setOn(el, on); el.dispatchEvent(new Event('change')); }
 
-    const STICK_HOLD_MS = 100, STICK_DEAD = 8, STICK_ABORT = 18, STICK_TRAVEL = 60, STICK_MAX_RATE = 0.55;
-    let stickHudTimer = 0;
+    const STICK_HOLD_MS = 90, STICK_DEAD = 3, STICK_TRAVEL = 28, STICK_MAX_RATE = 1.2;
+    let stickHudTimer = 0, stickArmTimer = 0;
     function positionStickHud(el) {
       const hud = $('stickHud'); if (!hud || !el) return;
       const r = el.getBoundingClientRect();
@@ -1342,49 +1343,56 @@
     }
     function tickStick(dt) {
       if (!stickState || !stickState.armed) return;
+      const hud = $('stickHud');
+      if (hud) { hud.classList.add('show'); hud.classList.remove('fade'); }
       const dx = stickState.dx, def = stickState.def;
       const excess = Math.abs(dx) - STICK_DEAD;
       if (excess <= 0) { updateStickHud(def); return; }
       const dir = dx < 0 ? -1 : 1;
-      const speed = Math.min(1, excess / STICK_TRAVEL) * STICK_MAX_RATE;
+      // Floor so a slight hold-nudge actually crawls, then ramp to max
+      const speed = (0.22 + 0.78 * Math.min(1, excess / STICK_TRAVEL)) * STICK_MAX_RATE;
       let next = def.get() + dir * (def.max - def.min) * speed * dt;
       next = Math.max(def.min, Math.min(def.max, next));
       def.set(next);
       updateStickHud(def);
       positionStickHud(stickState.el);
     }
+    function armStick() {
+      if (!stickState || stickState.armed) return;
+      stickState.armed = true;
+      stickState.el.classList.add('armed');
+      showStickHud(stickState.el, stickState.def);
+    }
     function bindStick(elId, def) {
       const el = $(elId); if (!el) return;
       const knob = el.querySelector('.stick-knob');
       el.addEventListener('pointerdown', e => {
+        e.preventDefault();
         e.stopPropagation();
+        clearTimeout(stickArmTimer);
         stickState = { el, knob, id: e.pointerId, originX: e.clientX, t0: performance.now(), armed: false, dx: 0, def };
+        try { el.setPointerCapture(e.pointerId); } catch (err) {}
         hideHint(); keepAwake();
-      });
+        stickArmTimer = setTimeout(armStick, STICK_HOLD_MS);
+      }, { passive: false });
     }
     function onStickMove(e) {
       if (!stickState || e.pointerId !== stickState.id) return;
+      e.preventDefault();
       const dx = e.clientX - stickState.originX;
       stickState.dx = dx;
-      const held = performance.now() - stickState.t0;
-      if (!stickState.armed) {
-        if (held < STICK_HOLD_MS && Math.abs(dx) > STICK_ABORT) { stickState = null; return; }
-        if (held >= STICK_HOLD_MS || Math.abs(dx) > STICK_DEAD) {
-          stickState.armed = true;
-          stickState.el.classList.add('armed');
-          try { stickState.el.setPointerCapture(e.pointerId); } catch (err) {}
-          showStickHud(stickState.el, stickState.def);
-        }
-        return;
+      if (!stickState.armed && Math.abs(dx) > STICK_DEAD) {
+        clearTimeout(stickArmTimer);
+        armStick();
       }
-      e.preventDefault();
-      if (stickState.knob) {
+      if (stickState.knob && stickState.armed) {
         const nx = Math.max(-22, Math.min(22, dx));
         stickState.knob.style.transform = 'translateX(' + nx + 'px)';
       }
     }
     function onStickUp(e) {
       if (!stickState || e.pointerId !== stickState.id) return;
+      clearTimeout(stickArmTimer);
       if (stickState.knob) stickState.knob.style.transform = '';
       stickState.el.classList.remove('armed');
       if (stickState.armed) fadeStickHud();
