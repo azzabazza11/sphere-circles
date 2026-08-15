@@ -1837,7 +1837,7 @@
       const seg = segCount();
       const doGlow = glow && N <= 140;
       const doDots = showDots && N <= 180;
-      const doTrails = (flyBlend > 0.04 || launchBlend > 0.04) && showTrails && (N <= 64 || (launchBlend > 0.04 && N <= 108));
+      const doTrails = showTrails && N <= 108;
       // Equator stays as a home beacon (fades in launch)
       if (showEq) strokePts(circlePts([0,1,0], Math.PI/2, [0,0,0], 48), 'rgba(255,210,80,' + (0.85 * (1 - 0.7 * launchBlend)) + ')', 2);
 
