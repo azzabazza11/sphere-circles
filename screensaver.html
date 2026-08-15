@@ -192,7 +192,14 @@
       pointer-events: none;
       transition: transform .12s ease;
     }
+    .stick.armed {
+      touch-action: none;
+    }
     .stick.armed .stick-knob { transition: none; background: #44ffaa; }
+    .tier-sheet.stick-locked, #quick.stick-locked {
+      overflow-x: hidden;
+      touch-action: none;
+    }
     .stick-label { position: relative; z-index: 1; user-select: none; -webkit-user-select: none; }
     #stickHud {
       position: fixed; z-index: 4; width: 222px;
@@ -370,7 +377,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.6.2 · larger stick HUD · two-tier Look Fly Motion</div>
+    <div id="ver">v1.6.3 · lock row while stick HUD · two-tier Look Fly Motion</div>
   </div>
 
   <div id="qrModal">
@@ -413,7 +420,7 @@
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.6.2';
+    const APP_VER = '1.6.3';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -568,11 +575,9 @@
     }
     function setSheet(name) {
       if (stickState) {
-        clearTimeout(stickArmTimer);
-        if (stickState.knob) stickState.knob.style.transform = '';
-        stickState.el.classList.remove('armed');
-        if (stickState.armed) fadeStickHud();
-        stickState = null;
+        const armed = stickState.armed;
+        abortStick();
+        if (armed) fadeStickHud();
       }
       activeSheet = name || null;
       const t = $('tier');
@@ -1425,6 +1430,24 @@
       def.set(def.int ? Math.round(next) : next);
       updateStickHud(def);
       positionStickHud(stickState.el);
+      pinStickRow();
+    }
+    function lockStickRow(el) {
+      const row = el.closest('.tier-sheet') || el.closest('#quick');
+      if (!row || !stickState) return;
+      stickState.row = row;
+      stickState.rowScroll = row.scrollLeft;
+      row.classList.add('stick-locked');
+      el.style.touchAction = 'none';
+    }
+    function unlockStickRow() {
+      if (!stickState) return;
+      const row = stickState.row, el = stickState.el;
+      if (row) row.classList.remove('stick-locked');
+      if (el) el.style.touchAction = '';
+    }
+    function pinStickRow() {
+      if (stickState && stickState.row) stickState.row.scrollLeft = stickState.rowScroll;
     }
     function armStick() {
       if (!stickState || stickState.armed) return;
@@ -1433,12 +1456,14 @@
       stickState.dx = 0;
       stickState.acc = stickState.def.get();
       stickState.el.classList.add('armed');
+      lockStickRow(stickState.el);
       try { stickState.el.setPointerCapture(stickState.id); } catch (err) {}
       showStickHud(stickState.el, stickState.def);
     }
     function abortStick() {
       if (!stickState) return;
       clearTimeout(stickArmTimer);
+      unlockStickRow();
       stickState.el.classList.remove('armed');
       if (stickState.knob) stickState.knob.style.transform = '';
       stickState = null;
@@ -1466,6 +1491,7 @@
         return;
       }
       e.preventDefault();
+      pinStickRow();
       stickState.dx = dx;
       if (stickState.knob) {
         const nx = Math.max(-22, Math.min(22, dx));
@@ -1481,6 +1507,12 @@
     addEventListener('pointermove', onStickMove, { passive: false });
     addEventListener('pointerup', onStickUp);
     addEventListener('pointercancel', onStickUp);
+    addEventListener('touchmove', e => {
+      if (stickState && stickState.armed) {
+        e.preventDefault();
+        pinStickRow();
+      }
+    }, { passive: false });
     bindStick('stickGhost', {
       label: 'Ghost', min: 0, max: 0.92,
       get: () => ghost,
