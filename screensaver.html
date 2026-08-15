@@ -340,6 +340,7 @@
       <div class="tier-sheet" data-sheet="motion">
         <button type="button" id="quickOrbit" class="on" aria-pressed="true">Orbit</button>
         <button type="button" id="quickTilt">Tilt</button>
+        <button type="button" id="quickImpact">Impact</button>
         <button type="button" class="stick" id="stickCount" aria-label="Circles"><span class="stick-knob"></span><span class="stick-label">Circles</span></button>
         <button type="button" class="stick" id="stickPhase" aria-label="Phase"><span class="stick-knob"></span><span class="stick-label">Phase</span></button>
         <button type="button" class="stick" id="stickRate" aria-label="Rate"><span class="stick-knob"></span><span class="stick-label">Rate</span></button>
@@ -370,6 +371,7 @@
           <button type="button" class="tog on" id="autoFlow" aria-pressed="true">Auto flow</button>
           <button type="button" class="tog on" id="autoSpin" aria-pressed="true">Orbit</button>
           <button type="button" class="tog" id="tiltOn" aria-pressed="false">Tilt</button>
+          <button type="button" class="tog" id="impactOn" aria-pressed="false">Impact</button>
           <button type="button" class="tog" id="launchMode" aria-pressed="false" hidden>Launch</button>
         </div>
         <label>Flow spd <input id="flowSpd" type="range" min="0.15" max="2" step="0.01" value="0.5"><span class="val" id="flowSpdVal">0.50</span></label>
@@ -413,7 +415,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.6.11 · slower launch home</div>
+    <div id="ver">v1.6.13 · impact wobble</div>
   </div>
 
   <div id="qrModal">
@@ -437,14 +439,14 @@
     let N = 16, phase = 0.35, rate = 1, twist = 0;
     let flyMode = false, flyAlt = 1.25, flyIn = false, flyVel = false, flyMirror = false, showTrails = true;
     let flyBlend = 0; // 0 = on sphere, 1 = full fly (smooth settle)
-    let launchMode = false, launchBlend = 0;
+    let launchMode = false, launchBlend = 0, launchHold = 0;
     let launchZoomBase = 280, chasePanX = 0, chasePanY = 0;
     let snakeReady = false, leadLon = 0;
     let leadHeading = [0, 1, 0], leadVel = [0, 0, 0];
     let snakePos = null, snakeN = null;
     let tiltDiscovered = false;
     try { tiltDiscovered = localStorage.getItem('circles_tilt_discovered') === '1'; } catch (e) {}
-    let showEq = true, showDots = true, glow = true, fillOn = false, starsOn = true, pondOn = false, autoSpin = true, tiltOn = false;
+    let showEq = true, showDots = true, glow = true, fillOn = false, starsOn = true, pondOn = false, autoSpin = true, tiltOn = false, impactOn = false;
     let pondFrac = 0.2; // pond height as fraction of screen (horizon = 1 - pondFrac)
     try {
       const pf = parseFloat(localStorage.getItem('circles_pond_frac'));
@@ -458,7 +460,7 @@
     let cycleT = 0;
     let flowMuteUI = false;
 
-    const APP_VER = '1.6.11';
+    const APP_VER = '1.6.13';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -651,6 +653,7 @@
       setOn($('quickFlyMirror'), flyMirror);
       setOn($('quickOrbit'), autoSpin);
       setOn($('quickTilt'), tiltOn);
+      setOn($('quickImpact'), impactOn);
     }
 
     function isOn(el) { return !!(el && el.classList.contains('on')); }
@@ -714,6 +717,7 @@
     wireQuickToggle('quickFlyMirror', 'flyMirror');
     wireQuickToggle('quickOrbit', 'autoSpin');
     wireQuickToggle('quickTilt', 'tiltOn');
+    wireQuickToggle('quickImpact', 'impactOn');
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./service-worker.js?v=' + APP_VER).catch(() => {});
@@ -1004,6 +1008,161 @@
       showToast('Tilt on — move the phone');
       hideHint(); keepAwake();
     }
+
+    // Impact: phone jabs (devicemotion) ring through the flock as a damped spring
+    let impactListening = false;
+    let impactG = [0, 0, 0], impactGReady = false;
+    let impactLin = [0, 0, 0];
+    let impactPos = [0, 0, 0], impactVel = [0, 0, 0];
+    let impactSpin = 0, impactSpinVel = 0;
+    let impactPeak = 0;
+    function remapMotion(x, y, z) {
+      const ang = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+      if (ang === 90) return [y, -x, z];
+      if (ang === -90 || ang === 270) return [-y, x, z];
+      if (ang === 180) return [-x, -y, z];
+      return [x, y, z];
+    }
+    function onDeviceMotion(e) {
+      if (!impactOn) return;
+      const a = e.acceleration;
+      const ag = e.accelerationIncludingGravity;
+      let ax = 0, ay = 0, az = 0;
+      if (a && a.x != null) {
+        ax = a.x; ay = a.y; az = a.z;
+      } else if (ag && ag.x != null) {
+        if (!impactGReady) {
+          impactG = [ag.x, ag.y, ag.z];
+          impactGReady = true;
+        } else {
+          impactG[0] += (ag.x - impactG[0]) * 0.06;
+          impactG[1] += (ag.y - impactG[1]) * 0.06;
+          impactG[2] += (ag.z - impactG[2]) * 0.06;
+        }
+        ax = ag.x - impactG[0];
+        ay = ag.y - impactG[1];
+        az = ag.z - impactG[2];
+      } else return;
+      const v = remapMotion(ax, ay, az);
+      impactLin[0] = v[0];
+      impactLin[1] = v[1];
+      impactLin[2] = v[2];
+    }
+    function startImpactListen() {
+      if (impactListening) return;
+      window.addEventListener('devicemotion', onDeviceMotion, true);
+      impactListening = true;
+    }
+    function stopImpactListen() {
+      if (!impactListening) return;
+      window.removeEventListener('devicemotion', onDeviceMotion, true);
+      impactListening = false;
+    }
+    async function setImpactEnabled(on) {
+      if (!on) {
+        impactOn = false;
+        setOn($('impactOn'), false);
+        stopImpactListen();
+        return;
+      }
+      if (typeof DeviceMotionEvent === 'undefined') {
+        showToast('Impact needs a motion sensor');
+        setOn($('impactOn'), false);
+        impactOn = false;
+        return;
+      }
+      try {
+        if (typeof DeviceMotionEvent.requestPermission === 'function') {
+          const res = await DeviceMotionEvent.requestPermission();
+          if (res !== 'granted') {
+            showToast('Motion permission denied');
+            setOn($('impactOn'), false);
+            impactOn = false;
+            return;
+          }
+        }
+      } catch (err) {
+        showToast('Impact unavailable');
+        setOn($('impactOn'), false);
+        impactOn = false;
+        return;
+      }
+      impactGReady = false;
+      impactPeak = 0;
+      impactOn = true;
+      setOn($('impactOn'), true);
+      startImpactListen();
+      showToast('Impact on — flick or jab the phone');
+      hideHint(); keepAwake();
+    }
+    function clampVec(v, max) {
+      const L = Math.hypot(v[0], v[1], v[2]);
+      if (L <= max || L < 1e-9) return;
+      const s = max / L;
+      v[0] *= s; v[1] *= s; v[2] *= s;
+    }
+    function updateImpact(dt) {
+      const lx = impactLin[0], ly = impactLin[1], lz = impactLin[2];
+      const mag = Math.hypot(lx, ly, lz);
+      impactPeak *= Math.pow(0.52, dt * 60);
+      if (impactOn && mag > 2.15 && mag > impactPeak * 1.1) {
+        impactPeak = mag;
+        const inv = 1 / mag;
+        const kick = 0.11 * (mag - 1.35);
+        const wx = lx * inv * kick, wy = ly * inv * kick, wz = lz * inv * kick;
+        // Device y (along phone) is up; z is out of screen → world z
+        impactVel[0] += wx;
+        impactVel[1] += wy;
+        impactVel[2] += wz;
+        impactSpinVel += wx * 2.4 - wz * 0.8;
+        if (launchMode && snakeReady) {
+          leadVel[0] += wx * 5.5;
+          leadVel[1] += wy * 5.5;
+          leadVel[2] += wz * 5.5;
+          leadHeading = norm3([
+            leadHeading[0] + wx * 0.18,
+            leadHeading[1] + wy * 0.18,
+            leadHeading[2] + wz * 0.18
+          ]);
+        }
+      }
+      if (!impactOn) {
+        impactLin[0] = impactLin[1] = impactLin[2] = 0;
+      }
+      // Underdamped spring — a jab rings then settles
+      const stiff = 16.5, damp = 4.4;
+      impactVel[0] += (-stiff * impactPos[0] - damp * impactVel[0]) * dt;
+      impactVel[1] += (-stiff * impactPos[1] - damp * impactVel[1]) * dt;
+      impactVel[2] += (-stiff * impactPos[2] - damp * impactVel[2]) * dt;
+      impactPos[0] += impactVel[0] * dt;
+      impactPos[1] += impactVel[1] * dt;
+      impactPos[2] += impactVel[2] * dt;
+      impactSpinVel += (-12.5 * impactSpin - 3.8 * impactSpinVel) * dt;
+      impactSpin += impactSpinVel * dt;
+      clampVec(impactPos, 1.65);
+      clampVec(impactVel, 9);
+      impactSpin = clampNum(impactSpin, -0.85, 0.85);
+      impactSpinVel = clampNum(impactSpinVel, -6, 6);
+      if (!impactOn && Math.hypot(impactPos[0], impactPos[1], impactPos[2]) < 1e-4) {
+        impactPos[0] = impactPos[1] = impactPos[2] = 0;
+        impactVel[0] = impactVel[1] = impactVel[2] = 0;
+      }
+      if (!impactOn && Math.abs(impactSpin) < 1e-4) { impactSpin = 0; impactSpinVel = 0; }
+    }
+    function impactShift(k, beta) {
+      const lag = k * 0.014;
+      const rim = 0.42 + 0.58 * Math.abs(Math.sin(beta || 0));
+      return [
+        (impactPos[0] + impactVel[0] * lag) * rim,
+        (impactPos[1] + impactVel[1] * lag) * rim,
+        (impactPos[2] + impactVel[2] * lag) * rim
+      ];
+    }
+    function rotY3(v, a) {
+      if (Math.abs(a) < 1e-5) return v;
+      const c = Math.cos(a), s = Math.sin(a);
+      return [v[0] * c - v[2] * s, v[1], v[0] * s + v[2] * c];
+    }
     function updateTiltView(dt) {
       const kYaw = Math.min(1, dt * (launchMode ? 11 : 9));
       const kPitch = Math.min(1, dt * (launchMode ? 14 : 9)); // pitch catches faster in Launch
@@ -1057,12 +1216,15 @@
         setOn($('starsOn'), true);
         clearTrails();
         seedLaunchSnake();
-        showToast('Launch — tilt the phone to fly the worm');
+        launchHold = autoFlow ? rnd(20, 60) : 0;
+        if (!flowMuteUI) showToast('Launch — tilt the phone to fly the worm');
         hideHint(); keepAwake();
       } else {
+        const wasOn = launchMode;
         launchMode = false;
         setOn($('launchMode'), false);
-        showToast('Returning home');
+        launchHold = 0;
+        if (wasOn && !flowMuteUI) showToast('Returning home');
       }
       syncQuick();
     }
@@ -1085,6 +1247,14 @@
       snakeReady = true;
     }
     function updateLaunchPhysics(dt) {
+      if (launchMode && autoFlow) {
+        if (launchHold <= 0) launchHold = rnd(20, 60);
+        launchHold -= dt;
+        if (launchHold <= 0) {
+          launchHold = 0;
+          void setLaunchEnabled(false);
+        }
+      }
       const target = launchMode ? 1 : 0;
       if (launchMode) {
         launchBlend += (1 - launchBlend) * Math.min(1, dt * 1.55);
@@ -1225,6 +1395,7 @@
     }
 
     bindCheck('tiltOn', v => { void setTiltEnabled(v).finally(() => syncQuick()); });
+    bindCheck('impactOn', v => { void setImpactEnabled(v).finally(() => syncQuick()); });
     bindCheck('launchMode', v => { void setLaunchEnabled(v); });
     updateLaunchVisibility();
     if ($('quickLaunch')) {
@@ -1644,7 +1815,7 @@
       { key:'hueSpd', id:'hueSpd', min:0, max:80, label:'Hue spd', fmt:v=>v.toFixed(1), get:()=>hueSpd, set:v=>{ hueSpd=v; setSliderSilent('hueSpd', v); } },
       { key:'pulse', id:'pulse', min:0, max:1, label:'Pulse', fmt:v=>v.toFixed(2), get:()=>pulse, set:v=>{ pulse=v; setSliderSilent('pulse', v); } },
       { key:'ghost', id:'ghost', min:0, max:0.92, label:'Ghost', fmt:v=>v.toFixed(2), get:()=>ghost, set:v=>{ ghost=v; setSliderSilent('ghost', v); } },
-      { key:'flyAlt', id:'flyAlt', min:0, max:3.5, label:'Altitude', fmt:v=>v.toFixed(2), get:()=>flyAlt, set:v=>{ flyAlt=v; setSliderSilent('flyAlt', v); } },
+      { key:'flyAlt', id:'flyAlt', fly:true, min:0, max:3.5, label:'Altitude', fmt:v=>v.toFixed(2), get:()=>flyAlt, set:v=>{ flyAlt=v; setSliderSilent('flyAlt', v); } },
       { key:'hue0', id:null, min:0, max:360, label:'Hue', fmt:v=>String(Math.round(((v%360)+360)%360)), get:()=>hue0, set:v=>{ hue0=((v%360)+360)%360; } }
     ];
     const FLOW_TOGGLES = [
@@ -1659,7 +1830,8 @@
       { key:'showEq', tog:true, label:'Equator', fmt:v=>v?'on':'off', get:()=>showEq, set:v=>setCheckSilent('showEq', !!v) },
       { key:'showDots', tog:true, label:'Dots', fmt:v=>v?'on':'off', get:()=>showDots, set:v=>setCheckSilent('showDots', !!v) },
       { key:'fillOn', tog:true, label:'Fill', fmt:v=>v?'on':'off', get:()=>fillOn, set:v=>setCheckSilent('fillOn', !!v) },
-      { key:'autoSpin', tog:true, label:'Orbit', fmt:v=>v?'on':'off', get:()=>autoSpin, set:v=>setCheckSilent('autoSpin', !!v) }
+      { key:'autoSpin', tog:true, label:'Orbit', fmt:v=>v?'on':'off', get:()=>autoSpin, set:v=>setCheckSilent('autoSpin', !!v) },
+      { key:'launchMode', tog:true, launch:true, label:'Launch', fmt:v=>v?'on':'off', get:()=>launchMode, set:v=>{ void setLaunchEnabled(!!v); } }
     ];
     function flowControl(key) {
       return FLOW_SLIDERS.find(x => x.key === key) || FLOW_TOGGLES.find(x => x.key === key);
@@ -1668,16 +1840,40 @@
     let flowSceneHold = 0;
     let flowTargetVoices = 1;
 
+    function flowWeight(s) {
+      if (s.key === 'flowSpd') return 0;
+      if (s.key === 'N' || s.key === 'phase' || s.key === 'rate') return 3.4;
+      if (s.key === 'ghost') return 2.8;
+      if (s.key === 'flyAlt') return flyMode ? 3.6 : 0;
+      if (s.launch) return (tiltOn && tiltDiscovered && !launchMode && launchBlend < 0.05) ? 0.4 : 0;
+      if (s.fly && !flyMode) return 0;
+      return 1;
+    }
+    function pickWeighted(pool) {
+      const w = pool.map(flowWeight);
+      let sum = 0;
+      for (const n of w) sum += n;
+      if (sum <= 0) return null;
+      let r = Math.random() * sum;
+      for (let i = 0; i < pool.length; i++) {
+        r -= w[i];
+        if (r <= 0) return pool[i];
+      }
+      return pool[pool.length - 1];
+    }
     function makeFlowVoice(avoidKeys) {
       const lock = launchMode ? new Set(['N', 'showTrails', 'starsOn', 'flyMode']) : null;
-      const ok = s => !avoidKeys.has(s.key) && !(lock && lock.has(s.key)) && !(s.fly && !flyMode);
+      const ok = s => s.key !== 'flowSpd' && !avoidKeys.has(s.key) && !(lock && lock.has(s.key)) && !(s.fly && !flyMode) && !(s.launch && (!tiltOn || !tiltDiscovered || launchMode || launchBlend > 0.05));
       const sliders = FLOW_SLIDERS.filter(ok);
       const togs = FLOW_TOGGLES.filter(ok);
       let pool;
       if (togs.length && Math.random() < 0.32) pool = togs;
       else if (sliders.length) pool = sliders;
-      else pool = togs.length ? togs : FLOW_SLIDERS;
-      const chosen = pool[Math.floor(Math.random() * pool.length)];
+      else pool = togs;
+      const chosen = pickWeighted(pool) || pickWeighted(sliders) || pickWeighted(togs);
+      if (!chosen) {
+        return { key: 'hue0', dir: 1, spd: 0, hold: rnd(1.2, 3) };
+      }
       if (chosen.tog) {
         chosen.set(!chosen.get());
         return { key: chosen.key, dir: 1, spd: 1.2, hold: rnd(1.2, 2.6), tog: true };
@@ -1739,6 +1935,10 @@
         }
         if (voice.spd <= 1e-6) continue;
         if (launchMode && voice.key === 'N') {
+          voice.hold = 0;
+          continue;
+        }
+        if (voice.key === 'flyAlt' && !flyMode) {
           voice.hold = 0;
           continue;
         }
@@ -1901,6 +2101,7 @@
       const baseT = cycleT / CYCLE;
       if (autoSpin && !drag && pointers.size < 2 && !tiltOn && !launchMode) rotY += 0.08 * dt;
       updateTiltView(dt);
+      updateImpact(dt);
       updateLaunchPhysics(dt);
       updateLaunchCamera(dt);
       if (launchMode || launchBlend > 0.08) {
@@ -1941,6 +2142,10 @@
           center = lerp3(sp.center, snakePos[k], lb);
           n = norm3(lerp3(sp.n, snakeN[k], lb));
         }
+        const spin = impactSpin + impactSpinVel * k * 0.012;
+        if (Math.abs(spin) > 1e-4) n = rotY3(n, spin * (0.65 + 0.35 * Math.sin(sp.beta)));
+        const jab = impactShift(k, sp.beta);
+        center = add(center, jab);
         // circlePts expects offset such that surf + offset = center
         const cR = R * Math.cos(rho);
         const off = [center[0] - cR * n[0], center[1] - cR * n[1], center[2] - cR * n[2]];
