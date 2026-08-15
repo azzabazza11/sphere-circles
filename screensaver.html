@@ -228,7 +228,9 @@
       position: fixed; left: 0; right: 0; bottom: calc(var(--dock-h, 72px) + 10px); text-align: center; color: #c8d0dc;
       font-family: system-ui, sans-serif; font-size: 13px; text-shadow: 0 1px 8px #000;
       pointer-events: none; opacity: 1; transition: opacity 1.2s ease; padding: 0 20px;
+      z-index: 3;
     }
+    #hint.hide { opacity: 0; }
 
     #qrModal {
       display: none; position: fixed; inset: 0; z-index: 20;
@@ -403,7 +405,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.6.8 · flow taps buttons</div>
+    <div id="ver">v1.6.9 · hint fade</div>
   </div>
 
   <div id="qrModal">
@@ -448,7 +450,7 @@
     let cycleT = 0;
     let flowMuteUI = false;
 
-    const APP_VER = '1.6.8';
+    const APP_VER = '1.6.9';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');

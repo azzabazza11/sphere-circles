@@ -2,7 +2,7 @@
   "name": "Sphere Circles",
   "short_name": "Circles",
   "description": "Animated tangential circles on a sphere — touch-friendly phone app",
-  "start_url": "./screensaver.html?v=1.6.8",
+  "start_url": "./screensaver.html?v=1.6.9",
   "scope": "./",
   "display": "fullscreen",
   "orientation": "any",
