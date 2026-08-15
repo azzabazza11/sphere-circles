@@ -280,7 +280,9 @@
       transition: opacity .25s ease;
     }
     #flowHud.show { opacity: 1; }
-    .flowHud-row { width: 222px; }
+    #flowHud.fade { opacity: 0; transition: opacity .7s ease; }
+    .flowHud-row { width: 222px; opacity: 1; transition: opacity .7s ease; }
+    .flowHud-row.fade { opacity: 0; }
     .flowHud-lab {
       color: #c8ffe8; font: 650 17px system-ui, sans-serif;
       text-align: center; margin-bottom: 6px;
@@ -331,7 +333,6 @@
         <button type="button" class="stick" id="stickPhase" aria-label="Phase"><span class="stick-knob"></span><span class="stick-label">Phase</span></button>
         <button type="button" class="stick" id="stickRate" aria-label="Rate"><span class="stick-knob"></span><span class="stick-label">Rate</span></button>
         <button type="button" class="stick" id="stickTwist" aria-label="Twist"><span class="stick-knob"></span><span class="stick-label">Twist</span></button>
-        <button type="button" class="stick" id="stickDrift" aria-label="Drift"><span class="stick-knob"></span><span class="stick-label">Drift</span></button>
         <button type="button" class="stick" id="stickFlowSpd" aria-label="Flow spd"><span class="stick-knob"></span><span class="stick-label">Flow spd</span></button>
       </div>
     </div>
@@ -354,7 +355,6 @@
         <label>Phase <input id="phase" type="range" min="0" max="1" step="0.001" value="0.35"><span class="val" id="phaseVal">0.35</span></label>
         <label>Rate <input id="rate" type="range" min="0.05" max="4" step="0.01" value="1"><span class="val" id="rateVal">1.00×</span></label>
         <label>Twist <input id="twist" type="range" min="0" max="4" step="0.01" value="0"><span class="val" id="twistVal">0.00</span></label>
-        <label>Drift <input id="drift" type="range" min="0" max="2" step="0.01" value="0"><span class="val" id="driftVal">0.00</span></label>
         <div class="togs">
           <button type="button" class="tog on" id="autoFlow" aria-pressed="true">Auto flow</button>
           <button type="button" class="tog on" id="autoSpin" aria-pressed="true">Orbit</button>
@@ -402,7 +402,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.6.5 · flow HUD · finer stick curve · two-tier dock</div>
+    <div id="ver">v1.6.7 · launch count · smooth rate · no drift</div>
   </div>
 
   <div id="qrModal">
@@ -423,7 +423,7 @@
   <div id="hint">Pinch · Tilt steers the view · Launch (after Tilt) flies the flock<br>Controls for more · Auto flow wanders on its own</div>
   <script>
     const $ = (id) => document.getElementById(id);
-    let N = 16, phase = 0.35, rate = 1, twist = 0, drift = 0;
+    let N = 16, phase = 0.35, rate = 1, twist = 0;
     let flyMode = false, flyAlt = 1.25, flyIn = false, flyVel = false, flyMirror = false, showTrails = true;
     let flyBlend = 0; // 0 = on sphere, 1 = full fly (smooth settle)
     let launchMode = false, launchBlend = 0;
@@ -444,8 +444,9 @@
     let stickState = null;
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
+    let cycleT = 0;
 
-    const APP_VER = '1.6.5';
+    const APP_VER = '1.6.7';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -470,7 +471,7 @@
       const stagger = N > 1 ? (phase * k) / N : 0;
       const tk = baseT + stagger;
       const { rho, beta } = animState(tk);
-      const lon = (2 * Math.PI * k) / N + simTime * drift + twist * beta;
+      const lon = (2 * Math.PI * k) / N + twist * beta;
       const cl = Math.cos(lon), sl = Math.sin(lon);
       const n = [Math.cos(beta) * cl, Math.sin(beta), Math.cos(beta) * sl];
       const flyOff = flyOffset(tk, lon, k);
@@ -799,7 +800,6 @@
     bindRange('phase', 'phaseVal', parseFloat, v => v.toFixed(2), v => phase = v);
     bindRange('rate', 'rateVal', parseFloat, v => v.toFixed(2)+'×', v => rate = v);
     bindRange('twist', 'twistVal', parseFloat, v => v.toFixed(2), v => twist = v);
-    bindRange('drift', 'driftVal', parseFloat, v => v.toFixed(2), v => drift = v);
     bindRange('flowSpd', 'flowSpdVal', parseFloat, v => v.toFixed(2), v => flowSpd = v);
     bindCheck('autoFlow', v => { autoFlow = v; if (v && controlsReady) pickFlowSlider(); syncQuick(); });
     bindCheck('autoSpin', v => { autoSpin = v; syncQuick(); });
@@ -1035,11 +1035,6 @@
             return;
           }
         }
-        // Stocking setup: dense staggered chain
-        N = 108; phase = 1; rate = 1;
-        setSliderSilent('count', N);
-        setSliderSilent('phase', phase);
-        setSliderSilent('rate', rate);
         launchMode = true;
         setOn($('launchMode'), true);
         launchZoomBase = zoom;
@@ -1060,7 +1055,7 @@
       syncQuick();
     }
     function seedLaunchSnake() {
-      const baseT = (simTime * rate) / CYCLE;
+      const baseT = cycleT / CYCLE;
       for (let k = 0; k < N; k++) {
         const p = spherePose(k, baseT);
         snakePos[k][0] = p.center[0];
@@ -1091,7 +1086,7 @@
       if (!snakeReady) return;
 
       const lb = launchBlend;
-      const baseT = (simTime * rate) / CYCLE;
+      const baseT = cycleT / CYCLE;
 
       // Camera axes — phone up/down maps to on-screen up/down (no sphere-normal fight)
       const cy = Math.cos(rotY), sy = Math.sin(rotY);
@@ -1604,12 +1599,6 @@
       set: v => { twist = v; setSliderSilent('twist', v); },
       fmt: v => v.toFixed(2)
     });
-    bindStick('stickDrift', {
-      label: 'Drift', min: 0, max: 2,
-      get: () => drift,
-      set: v => { drift = v; setSliderSilent('drift', v); },
-      fmt: v => v.toFixed(2)
-    });
     bindStick('stickFlowSpd', {
       label: 'Flow spd', min: 0.15, max: 2,
       get: () => flowSpd,
@@ -1629,7 +1618,6 @@
       { key:'phase', id:'phase', min:0, max:1, label:'Phase', fmt:v=>v.toFixed(2), get:()=>phase, set:v=>{ phase=v; setSliderSilent('phase', v); } },
       { key:'rate', id:'rate', min:0.05, max:4, label:'Rate', fmt:v=>v.toFixed(2)+'×', get:()=>rate, set:v=>{ rate=v; setSliderSilent('rate', v); } },
       { key:'twist', id:'twist', min:0, max:4, label:'Twist', fmt:v=>v.toFixed(2), get:()=>twist, set:v=>{ twist=v; setSliderSilent('twist', v); } },
-      { key:'drift', id:'drift', min:0, max:2, label:'Drift', fmt:v=>v.toFixed(2), get:()=>drift, set:v=>{ drift=v; setSliderSilent('drift', v); } },
       { key:'lineW', id:'width', min:0.4, max:5, label:'Width', fmt:v=>v.toFixed(2), get:()=>lineW, set:v=>{ lineW=v; setSliderSilent('width', v); } },
       { key:'hueSpd', id:'hueSpd', min:0, max:80, label:'Hue spd', fmt:v=>v.toFixed(1), get:()=>hueSpd, set:v=>{ hueSpd=v; setSliderSilent('hueSpd', v); } },
       { key:'pulse', id:'pulse', min:0, max:1, label:'Pulse', fmt:v=>v.toFixed(2), get:()=>pulse, set:v=>{ pulse=v; setSliderSilent('pulse', v); } },
@@ -1642,7 +1630,7 @@
     let flowTargetVoices = 1;
 
     function makeFlowVoice(avoidKeys) {
-      const lock = launchMode ? new Set(['N', 'phase', 'rate']) : null;
+      const lock = launchMode ? new Set(['N']) : null;
       const pool = FLOW_SLIDERS.filter(s => !avoidKeys.has(s.key) && !(lock && lock.has(s.key)));
       const fallback = FLOW_SLIDERS.filter(s => !(lock && lock.has(s.key)));
       const pickFrom = pool.length ? pool : (fallback.length ? fallback : FLOW_SLIDERS);
@@ -1676,7 +1664,7 @@
       }
     }
     function tickFlow(dt) {
-      if (!autoFlow || paused) { updateFlowHud(); return; }
+      if (!autoFlow || paused) { updateFlowHud(dt); return; }
       if (!flowVoices.length) pickFlowSlider();
       flowSceneHold -= dt;
       if (flowSceneHold <= 0) {
@@ -1704,7 +1692,7 @@
           voice.key = next.key; voice.dir = next.dir; voice.spd = next.spd; voice.hold = next.hold;
         }
         if (voice.spd <= 1e-6) continue;
-        if (launchMode && (voice.key === 'N' || voice.key === 'phase' || voice.key === 'rate')) {
+        if (launchMode && voice.key === 'N') {
           voice.hold = 0;
           continue;
         }
@@ -1722,28 +1710,56 @@
           else voice.spd = Math.max(0.12, Math.min(4.2, voice.spd * rnd(0.55, 1.7)));
         }
       }
-      updateFlowHud();
+      updateFlowHud(dt);
     }
-    function updateFlowHud() {
+    const flowHudRows = new Map();
+    function updateFlowHud(dt) {
       const hud = $('flowHud'); if (!hud) return;
-      if ((stickState && stickState.armed) || !autoFlow || paused) {
+      const stickBusy = !!(stickState && stickState.armed);
+      const live = new Set();
+      if (autoFlow && !paused && !stickBusy) {
+        for (const voice of flowVoices) {
+          if (voice.spd <= 1e-6) continue;
+          const s = FLOW_SLIDERS.find(x => x.key === voice.key);
+          if (!s) continue;
+          const v = s.get();
+          const t = (v - s.min) / Math.max(1e-6, s.max - s.min);
+          const lab = (s.label || s.key) + ' ' + (s.fmt ? s.fmt(v) : v.toFixed(2));
+          live.add(s.key);
+          let row = flowHudRows.get(s.key);
+          if (!row) {
+            const el = document.createElement('div');
+            el.className = 'flowHud-row';
+            el.innerHTML = '<div class="flowHud-lab"></div><div class="flowHud-track"><div class="flowHud-fill"></div></div>';
+            hud.appendChild(el);
+            row = { el, labEl: el.querySelector('.flowHud-lab'), fillEl: el.querySelector('.flowHud-fill'), fade: 0 };
+            flowHudRows.set(s.key, row);
+          }
+          row.el.classList.remove('fade');
+          row.fade = 0;
+          row.labEl.textContent = lab;
+          row.fillEl.style.width = (Math.max(0, Math.min(1, t)) * 100) + '%';
+        }
+      }
+      for (const [key, row] of [...flowHudRows]) {
+        if (live.has(key)) continue;
+        row.el.classList.add('fade');
+        row.fade = Math.min(1, row.fade + (dt || 0) / 0.7);
+        if (row.fade >= 1) {
+          row.el.remove();
+          flowHudRows.delete(key);
+        }
+      }
+      if (stickBusy) {
         hud.classList.remove('show');
-        return;
+        hud.classList.add('fade');
+      } else if (flowHudRows.size) {
+        hud.classList.add('show');
+        hud.classList.remove('fade');
+      } else {
+        hud.classList.remove('show');
+        hud.classList.add('fade');
       }
-      const rows = [];
-      for (const voice of flowVoices) {
-        if (voice.spd <= 1e-6) continue;
-        const s = FLOW_SLIDERS.find(x => x.key === voice.key);
-        if (!s) continue;
-        const v = s.get();
-        const t = (v - s.min) / Math.max(1e-6, s.max - s.min);
-        const lab = (s.label || s.key) + ' ' + (s.fmt ? s.fmt(v) : v.toFixed(2));
-        rows.push('<div class="flowHud-row"><div class="flowHud-lab">' + lab + '</div><div class="flowHud-track"><div class="flowHud-fill" style="width:' + (Math.max(0, Math.min(1, t)) * 100) + '%"></div></div></div>');
-      }
-      if (!rows.length) { hud.classList.remove('show'); return; }
-      const html = rows.join('');
-      if (hud._html !== html) { hud.innerHTML = html; hud._html = html; }
-      hud.classList.add('show');
     }
     controlsReady = true;
     syncQuick();
@@ -1801,7 +1817,10 @@
     function frame(now) {
       requestAnimationFrame(frame);
       const dt = Math.min(0.05, (now-lastNow)*0.001); lastNow = now;
-      if (!paused) simTime += dt;
+      if (!paused) {
+        simTime += dt;
+        cycleT += rate * dt;
+      }
       tickFlow(dt);
       tickStick(dt);
       updateViewLift(dt);
@@ -1809,7 +1828,7 @@
       const flyTarget = flyMode ? 1 : 0;
       flyBlend += (flyTarget - flyBlend) * Math.min(1, dt * 2.2);
       if (Math.abs(flyBlend - flyTarget) < 0.001) flyBlend = flyTarget;
-      const baseT = (simTime * rate) / CYCLE;
+      const baseT = cycleT / CYCLE;
       if (autoSpin && !drag && pointers.size < 2 && !tiltOn && !launchMode) rotY += 0.08 * dt;
       updateTiltView(dt);
       updateLaunchPhysics(dt);

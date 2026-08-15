@@ -192,7 +192,6 @@
         <label>Phase <input id="phase" type="range" min="0" max="1" step="0.001" value="0.35"><span class="val" id="phaseVal">0.35</span></label>
         <label>Rate <input id="rate" type="range" min="0.05" max="4" step="0.01" value="1"><span class="val" id="rateVal">1.00×</span></label>
         <label>Twist <input id="twist" type="range" min="0" max="4" step="0.01" value="0"><span class="val" id="twistVal">0.00</span></label>
-        <label>Drift <input id="drift" type="range" min="0" max="2" step="0.01" value="0"><span class="val" id="driftVal">0.00</span></label>
         <div class="togs">
           <button type="button" class="tog" id="autoFlow" aria-pressed="false">Auto flow</button>
           <button type="button" class="tog" id="pause" aria-pressed="false">Pause</button>
@@ -295,7 +294,8 @@
       el.addEventListener('change', go); go(); return el;
     };
 
-    let N = 16, phase = 0.35, rate = 1, twist = 0, drift = 0, paused = false;
+    let N = 16, phase = 0.35, rate = 1, twist = 0, paused = false;
+    let cycleT = 0;
     let flyMode = false, flyAlt = 1.25, flyIn = false, flyVel = false, flyMirror = false, showTrails = true;
     let flyBlend = 0;
     let showSphere = false, showEq = true, showDots = true, showNrm = false;
@@ -416,7 +416,6 @@
     bindRange('phase', 'phaseVal', parseFloat, v => v.toFixed(2), v => phase = v);
     bindRange('rate', 'rateVal', parseFloat, v => v.toFixed(2) + '×', v => rate = v);
     bindRange('twist', 'twistVal', parseFloat, v => v.toFixed(2), v => twist = v);
-    bindRange('drift', 'driftVal', parseFloat, v => v.toFixed(2), v => drift = v);
     bindRange('flowSpd', 'flowSpdVal', parseFloat, v => v.toFixed(2), v => flowSpd = v);
     bindCheck('pause', v => paused = v);
 
@@ -462,7 +461,7 @@
     const presets = {
       lattice: () => {
         setSlider('count', 24); setSlider('phase', 0); setSlider('rate', 1);
-        setSlider('twist', 0); setSlider('drift', 0); setCheck('flyMode', false); setCheck('flyVel', false);
+        setSlider('twist', 0); setCheck('flyMode', false); setCheck('flyVel', false);
         setCheck('showSphere', false); setCheck('showEq', true); setCheck('glow', true);
         setCheck('fillOn', false); setCheck('starsOn', true); setCheck('autoSpin', true);
         setCheck('showNrm', false); setSlider('width', 1.5); setSlider('hueSpd', 6);
@@ -470,7 +469,7 @@
       },
       nebula: () => {
         setSlider('count', 48); setSlider('phase', 0.55); setSlider('rate', 0.7);
-        setSlider('twist', 0.85); setSlider('drift', 0.15); setCheck('flyMode', false);
+        setSlider('twist', 0.85); setCheck('flyMode', false);
         setCheck('showSphere', false); setCheck('showEq', false); setCheck('glow', true);
         setCheck('fillOn', true); setCheck('starsOn', true); setCheck('autoSpin', true);
         setCheck('showDots', false); setCheck('showNrm', false);
@@ -479,7 +478,7 @@
       },
       launch: () => {
         setSlider('count', 32); setSlider('phase', 0.45); setSlider('rate', 1.0);
-        setSlider('twist', 0); setSlider('drift', 0); setCheck('flyMode', true); setCheck('flyVel', true);
+        setSlider('twist', 0); setCheck('flyMode', true); setCheck('flyVel', true);
         setSlider('flyAlt', 2.1); setCheck('flyIn', false); setCheck('flyMirror', true); setCheck('showTrails', true);
         setCheck('showSphere', false); setCheck('showEq', true); setCheck('glow', true);
         setCheck('fillOn', false); setCheck('showDots', true); setCheck('showNrm', false);
@@ -488,7 +487,7 @@
       },
       helix: () => {
         setSlider('count', 36); setSlider('phase', 0.7); setSlider('rate', 0.85);
-        setSlider('twist', 2.4); setSlider('drift', 0.35); setCheck('flyMode', false);
+        setSlider('twist', 2.4); setCheck('flyMode', false);
         setCheck('showSphere', false); setCheck('showEq', true); setCheck('glow', true);
         setCheck('fillOn', false); setCheck('showDots', true); setCheck('showNrm', false);
         setSlider('width', 1.7); setSlider('hueSpd', 14); setSlider('pulse', 0.2);
@@ -496,7 +495,7 @@
       },
       wire: () => {
         setSlider('count', 16); setSlider('phase', 0); setSlider('rate', 1);
-        setSlider('twist', 0); setSlider('drift', 0); setCheck('flyMode', false);
+        setSlider('twist', 0); setCheck('flyMode', false);
         setCheck('showSphere', true); setCheck('showEq', true); setCheck('glow', false);
         setCheck('fillOn', false); setCheck('starsOn', false); setCheck('autoSpin', false);
         setCheck('showDots', true); setCheck('showNrm', true);
@@ -505,7 +504,7 @@
       },
       dense: () => {
         setSlider('count', 108); setSlider('phase', 0.42); setSlider('rate', 0.55);
-        setSlider('twist', 0.4); setSlider('drift', 0.08); setCheck('flyMode', false);
+        setSlider('twist', 0.4); setCheck('flyMode', false);
         setCheck('showSphere', false); setCheck('showEq', false); setCheck('glow', true);
         setCheck('fillOn', false); setCheck('showDots', false); setCheck('showNrm', false);
         setSlider('width', 0.9); setSlider('hueSpd', 12); setSlider('pulse', 0.12);
@@ -537,7 +536,6 @@
       { key:'phase', min:0, max:1, get:()=>phase, set:v=>{ phase=v; setSlider('phase', v, true); } },
       { key:'rate', min:0.05, max:4, get:()=>rate, set:v=>{ rate=v; setSlider('rate', v, true); } },
       { key:'twist', min:0, max:4, get:()=>twist, set:v=>{ twist=v; setSlider('twist', v, true); } },
-      { key:'drift', min:0, max:2, get:()=>drift, set:v=>{ drift=v; setSlider('drift', v, true); } },
       { key:'lineW', min:0.4, max:5, get:()=>lineW, set:v=>{ lineW=v; setSlider('width', v, true); } },
       { key:'hue0', min:0, max:360, get:()=>hue0, set:v=>{ hue0=((v%360)+360)%360; setSlider('hue', hue0, true); } },
       { key:'hueSpd', min:0, max:80, get:()=>hueSpd, set:v=>{ hueSpd=v; setSlider('hueSpd', v, true); } },
@@ -771,12 +769,15 @@
       requestAnimationFrame(frame);
       const dt = Math.min(0.05, (now - lastNow) * 0.001);
       lastNow = now;
-      if (!paused) simTime += dt;
+      if (!paused) {
+        simTime += dt;
+        cycleT += rate * dt;
+      }
       tickFlow(dt);
       const flyTarget = flyMode ? 1 : 0;
       flyBlend += (flyTarget - flyBlend) * Math.min(1, dt * 2.2);
       if (Math.abs(flyBlend - flyTarget) < 0.001) flyBlend = flyTarget;
-      const baseT = (simTime * rate) / CYCLE;
+      const baseT = cycleT / CYCLE;
       rVal.textContent = baseT.toFixed(2);
       nLive.textContent = String(N);
       if (autoSpin && !drag) rotY += 0.12 * dt;
@@ -805,7 +806,7 @@
         const stagger = N > 1 ? (phase * k) / N : 0;
         const tk = baseT + stagger;
         const { rho, beta } = animState(tk);
-        const lon = (2 * Math.PI * k) / N + simTime * drift + twist * beta;
+        const lon = (2 * Math.PI * k) / N + twist * beta;
         const cl = Math.cos(lon), sl = Math.sin(lon);
         const n = [Math.cos(beta)*cl, Math.sin(beta), Math.cos(beta)*sl];
         const off = flyOffset(tk, lon, k);
@@ -887,7 +888,7 @@
     if (autoFlow) pickFlowSlider();
     frame(t0);
 
-    const APP_VER = '1.6.6';
+    const APP_VER = '1.6.7';
     function shareUrl() {
       try {
         const u = new URL(location.href);
