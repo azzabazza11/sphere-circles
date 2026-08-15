@@ -23,6 +23,7 @@
       border-radius: 22px; padding: 10px 16px; font: 600 14px system-ui, sans-serif;
       backdrop-filter: blur(8px); cursor: pointer; -webkit-tap-highlight-color: transparent;
       min-width: 96px; text-align: center;
+      transition: transform .55s cubic-bezier(.22,.82,.28,1), opacity .4s ease;
     }
     #scrim {
       display: none; position: fixed; inset: 0; z-index: 4;
@@ -147,6 +148,25 @@
       pointer-events: none;
       user-select: none; -webkit-user-select: none;
       -webkit-touch-callout: none;
+      transition: transform .55s cubic-bezier(.22,.82,.28,1);
+    }
+    body.chrome-away #fab {
+      transform: translateX(calc(100% + 24px));
+      opacity: 0;
+      pointer-events: none;
+    }
+    body.chrome-away #dock {
+      transform: translateY(calc(100% + 40px));
+    }
+    body.chrome-away #dock,
+    body.chrome-away #dock * {
+      pointer-events: none !important;
+    }
+    body.chrome-away #flowHud {
+      opacity: 0 !important;
+    }
+    body.chrome-away #hint {
+      opacity: 0;
     }
     #quick, .tier-sheet {
       display: flex; flex-wrap: nowrap; align-items: center; gap: 10px;
@@ -322,6 +342,7 @@
   <div id="dock">
     <div id="tier">
       <div class="tier-sheet" data-sheet="look">
+        <button type="button" id="quickTrails" class="on" aria-pressed="true">Trails</button>
         <button type="button" id="quickPond">Pond</button>
         <button type="button" id="quickEq" class="on" aria-pressed="true">Equator</button>
         <button type="button" id="quickDots" class="on" aria-pressed="true">Dots</button>
@@ -349,13 +370,12 @@
       </div>
     </div>
     <div id="quick">
+      <button type="button" id="quickMotion">Motion</button>
+      <button type="button" id="quickLook">Look</button>
       <button type="button" id="quickFly">Fly</button>
       <button type="button" id="quickFlow" class="on">Flow</button>
-      <button type="button" id="quickLook">Look</button>
-      <button type="button" id="quickMotion">Motion</button>
       <button type="button" id="quickGlow" class="on" aria-pressed="true">Glow</button>
       <button type="button" id="quickStars" class="on" aria-pressed="true">Stars</button>
-      <button type="button" id="quickTrails" class="on" aria-pressed="true">Trails</button>
       <button type="button" id="quickLaunch" hidden>Launch</button>
     </div>
   </div>
@@ -385,7 +405,6 @@
           <button type="button" class="tog" id="flyVel" aria-pressed="false">Vel by R</button>
           <button type="button" class="tog" id="flyIn" aria-pressed="false">Inward</button>
           <button type="button" class="tog" id="flyMirror" aria-pressed="false">Mirror</button>
-          <button type="button" class="tog on" id="showTrails" aria-pressed="true">Trails</button>
         </div>
         <label>Altitude <input id="flyAlt" type="range" min="0" max="3.5" step="0.01" value="1.25"><span class="val" id="flyAltVal">1.25</span></label>
       </div>
@@ -396,6 +415,7 @@
         <div class="togs">
           <button type="button" class="tog on" id="glow" aria-pressed="true">Glow</button>
           <button type="button" class="tog on" id="starsOn" aria-pressed="true">Stars</button>
+          <button type="button" class="tog on" id="showTrails" aria-pressed="true">Trails</button>
           <button type="button" class="tog" id="pondOn" aria-pressed="false">Pond</button>
           <button type="button" class="tog on" id="showEq" aria-pressed="true">Equator</button>
           <button type="button" class="tog on" id="showDots" aria-pressed="true">Dots</button>
@@ -415,7 +435,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.6.14 · impact orbit</div>
+    <div id="ver">v1.6.16 · dock order</div>
   </div>
 
   <div id="qrModal">
@@ -460,7 +480,7 @@
     let cycleT = 0;
     let flowMuteUI = false;
 
-    const APP_VER = '1.6.14';
+    const APP_VER = '1.6.16';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -503,7 +523,8 @@
 
     fab.addEventListener('click', e => {
       e.preventDefault(); e.stopPropagation();
-      togglePanel(); hideHint(); keepAwake();
+      pokeChrome(); keepAwake();
+      togglePanel();
     });
     $('doneBtn').addEventListener('click', e => {
       e.preventDefault(); e.stopPropagation(); closePanel();
@@ -606,12 +627,38 @@
       });
     });
 
+    const CHROME_IDLE_MS = 4200;
+    let chromeAway = false;
+    let chromeTouchedAt = performance.now();
+    let chromeNeedWake = false;
     function measureDock() {
       const d = $('dock');
       if (!d || !H) return;
-      const r = d.getBoundingClientRect();
-      const h = Math.max(56, H - r.top);
+      if (chromeAway) {
+        document.documentElement.style.setProperty('--dock-h', '0px');
+        return;
+      }
+      const h = Math.max(56, d.offsetHeight + 16);
       document.documentElement.style.setProperty('--dock-h', h + 'px');
+    }
+    function chromeBusy() {
+      return panel.classList.contains('open')
+        || (!!$('qrModal') && $('qrModal').classList.contains('open'))
+        || !!stickState
+        || pondDragging;
+    }
+    function setChromeAway(away) {
+      if (away && chromeBusy()) away = false;
+      chromeNeedWake = away;
+      if (chromeAway === away) return;
+      chromeAway = away;
+      document.body.classList.toggle('chrome-away', away);
+      measureDock();
+    }
+    function pokeChrome() {
+      hideHint();
+      chromeTouchedAt = performance.now();
+      setChromeAway(false);
     }
     function setSheet(name) {
       if (stickState) {
@@ -1510,15 +1557,16 @@
       measureDock();
     }
     function updateViewLift(dt) {
-      const open = panel.classList.contains('open');
+      const open = !chromeAway && panel.classList.contains('open');
+      const sheet = !chromeAway && activeSheet;
       if (open) {
         const ph = panel.getBoundingClientRect().height || H * 0.45;
         viewLiftPx = Math.min(H * 0.28, Math.max(H * 0.14, ph * 0.45));
-      } else if (activeSheet) {
+      } else if (sheet) {
         const th = ($('tier') && $('tier').classList.contains('open')) ? ($('tier').getBoundingClientRect().height || 52) : 0;
         viewLiftPx = Math.min(H * 0.14, Math.max(28, th * 0.55));
       }
-      const target = (open || activeSheet) ? 1 : 0;
+      const target = (open || sheet) ? 1 : 0;
       viewLift += (target - viewLift) * Math.min(1, dt * 4.2);
       if (Math.abs(viewLift - target) < 0.001) viewLift = target;
       cy = H / 2 - viewLift * viewLiftPx;
@@ -1542,10 +1590,7 @@
     function pondClearancePx() {
       const fingertip = 14;
       const d = $('dock');
-      if (d) {
-        const r = d.getBoundingClientRect();
-        if (r.height > 0) return Math.max(64, (H - r.top) + fingertip);
-      }
+      if (d && !chromeAway) return Math.max(64, d.offsetHeight + 12 + fingertip);
       return 88;
     }
     function clampPondFrac(f) {
@@ -1560,9 +1605,15 @@
       try { localStorage.setItem('circles_pond_frac', String(pondFrac)); } catch (e) {}
     }
     function onDown(x, y, id) {
-      if (panel.classList.contains('open')) { closePanel(); return; }
+      if (panel.classList.contains('open')) { closePanel(); pokeChrome(); return; }
+      if (chromeAway || chromeNeedWake) {
+        pokeChrome();
+        keepAwake();
+        pointers.set(id, { x, y });
+        return;
+      }
       pointers.set(id, { x, y });
-      hideHint(); keepAwake();
+      pokeChrome(); keepAwake();
       if (pointers.size >= 2) { beginPinch(); return; }
       // Pond mode: grab near the horizon to slide it up/down
       if (pondOn && Math.abs(y - horizonY()) < 44) {
@@ -1575,7 +1626,12 @@
     }
     function onMove(x, y, id) {
       if (stickState) return;
+      if (chromeAway || chromeNeedWake) {
+        pokeChrome();
+        return;
+      }
       if (!pointers.has(id)) return;
+      pokeChrome();
       pointers.set(id, { x, y });
       if (pointers.size >= 2) {
         const d = pinchDist();
@@ -1617,6 +1673,7 @@
     canvas.addEventListener('pointercancel', e => onUp(e.pointerId));
     canvas.addEventListener('wheel', e => {
       e.preventDefault();
+      pokeChrome();
       zoom = clampZoom(zoom * Math.exp(-e.deltaY * 0.00135));
       if (launchMode) launchZoomBase = zoom;
     }, { passive: false });
@@ -1843,10 +1900,19 @@
     });
     const dockEl = $('dock');
     if (dockEl) {
-      dockEl.addEventListener('pointerdown', e => e.stopPropagation());
+      dockEl.addEventListener('pointerdown', e => { e.stopPropagation(); pokeChrome(); });
       dockEl.addEventListener('contextmenu', e => e.preventDefault());
       dockEl.addEventListener('selectstart', e => e.preventDefault());
     }
+    document.addEventListener('pointerdown', e => {
+      if (e.target === canvas) return;
+      pokeChrome();
+    }, true);
+    document.addEventListener('pointermove', e => {
+      if (e.target === canvas) return;
+      if (e.pointerType === 'mouse' && !e.buttons) return;
+      pokeChrome();
+    }, true);
 
     // Auto-flow: 1–2 voices wander sliders and tap dock toggles.
     const FLOW_SLIDERS = [
@@ -2136,6 +2202,8 @@
       }
       tickFlow(dt);
       tickStick(dt);
+      if (chromeBusy()) chromeTouchedAt = now;
+      else if (!chromeAway && now - chromeTouchedAt > CHROME_IDLE_MS) setChromeAway(true);
       updateViewLift(dt);
       // smooth settle when toggling fly
       const flyTarget = flyMode ? 1 : 0;
