@@ -148,7 +148,7 @@
       user-select: none; -webkit-user-select: none;
       -webkit-touch-callout: none;
     }
-    #quick, #tier {
+    #quick, .tier-sheet {
       display: flex; flex-wrap: nowrap; align-items: center; gap: 10px;
       overflow-x: auto; overflow-y: hidden;
       -webkit-overflow-scrolling: touch;
@@ -157,12 +157,15 @@
       pointer-events: auto;
       scrollbar-width: none;
     }
-    #quick::-webkit-scrollbar, #tier::-webkit-scrollbar { display: none; }
-    #tier { display: none; }
-    #tier.open { display: flex; }
-    #quick button, #tier > button {
+    #quick::-webkit-scrollbar, .tier-sheet::-webkit-scrollbar { display: none; }
+    #tier { display: none; pointer-events: auto; }
+    #tier.open { display: block; }
+    .tier-sheet { display: none; }
+    .tier-sheet.on { display: flex; }
+    #quick button, .tier-sheet > button {
       flex: 0 0 auto;
       min-width: 88px; padding: 12px 18px; border-radius: 999px;
+      white-space: nowrap;
       border: 1px solid rgba(255,255,255,0.18);
       background: rgba(8,10,18,0.78); color: #c8d0dc;
       font: 650 14px system-ui, sans-serif;
@@ -171,7 +174,7 @@
       user-select: none; -webkit-user-select: none;
       -webkit-touch-callout: none;
     }
-    #quick button.on, #tier > button.on {
+    #quick button.on, .tier-sheet > button.on {
       color: #062218; background: #44ffaa; border-color: #44ffaa;
     }
     .stick {
@@ -192,7 +195,7 @@
     .stick.armed .stick-knob { transition: none; background: #44ffaa; }
     .stick-label { position: relative; z-index: 1; user-select: none; -webkit-user-select: none; }
     #stickHud {
-      position: fixed; z-index: 4; width: 128px;
+      position: fixed; z-index: 4; width: 148px;
       pointer-events: none; opacity: 0;
       transform: translateX(-50%);
       transition: opacity .25s ease;
@@ -273,18 +276,41 @@
   </div>
   <div id="dock">
     <div id="tier">
-      <button type="button" id="quickGlow" class="on" aria-pressed="true">Glow</button>
-      <button type="button" id="quickStars" class="on" aria-pressed="true">Stars</button>
-      <button type="button" id="quickTrails" class="on" aria-pressed="true">Trails</button>
-      <button type="button" class="stick" id="stickGhost" aria-label="Ghost">
-        <span class="stick-knob" id="stickGhostKnob"></span>
-        <span class="stick-label">Ghost</span>
-      </button>
+      <div class="tier-sheet" data-sheet="look">
+        <button type="button" id="quickPond">Pond</button>
+        <button type="button" id="quickEq" class="on" aria-pressed="true">Equator</button>
+        <button type="button" id="quickDots" class="on" aria-pressed="true">Dots</button>
+        <button type="button" id="quickFill">Fill</button>
+        <button type="button" class="stick" id="stickWidth" aria-label="Width"><span class="stick-knob"></span><span class="stick-label">Width</span></button>
+        <button type="button" class="stick" id="stickHueSpd" aria-label="Hue spd"><span class="stick-knob"></span><span class="stick-label">Hue spd</span></button>
+        <button type="button" class="stick" id="stickGhost" aria-label="Ghost"><span class="stick-knob"></span><span class="stick-label">Ghost</span></button>
+        <button type="button" class="stick" id="stickPulse" aria-label="Pulse"><span class="stick-knob"></span><span class="stick-label">Pulse</span></button>
+      </div>
+      <div class="tier-sheet" data-sheet="fly">
+        <button type="button" id="quickFlyVel">Vel by R</button>
+        <button type="button" id="quickFlyIn">Inward</button>
+        <button type="button" id="quickFlyMirror">Mirror</button>
+        <button type="button" class="stick" id="stickAlt" aria-label="Altitude"><span class="stick-knob"></span><span class="stick-label">Altitude</span></button>
+      </div>
+      <div class="tier-sheet" data-sheet="motion">
+        <button type="button" id="quickOrbit" class="on" aria-pressed="true">Orbit</button>
+        <button type="button" id="quickTilt">Tilt</button>
+        <button type="button" class="stick" id="stickCount" aria-label="Circles"><span class="stick-knob"></span><span class="stick-label">Circles</span></button>
+        <button type="button" class="stick" id="stickPhase" aria-label="Phase"><span class="stick-knob"></span><span class="stick-label">Phase</span></button>
+        <button type="button" class="stick" id="stickRate" aria-label="Rate"><span class="stick-knob"></span><span class="stick-label">Rate</span></button>
+        <button type="button" class="stick" id="stickTwist" aria-label="Twist"><span class="stick-knob"></span><span class="stick-label">Twist</span></button>
+        <button type="button" class="stick" id="stickDrift" aria-label="Drift"><span class="stick-knob"></span><span class="stick-label">Drift</span></button>
+        <button type="button" class="stick" id="stickFlowSpd" aria-label="Flow spd"><span class="stick-knob"></span><span class="stick-label">Flow spd</span></button>
+      </div>
     </div>
     <div id="quick">
       <button type="button" id="quickFly">Fly</button>
       <button type="button" id="quickFlow" class="on">Flow</button>
       <button type="button" id="quickLook">Look</button>
+      <button type="button" id="quickMotion">Motion</button>
+      <button type="button" id="quickGlow" class="on" aria-pressed="true">Glow</button>
+      <button type="button" id="quickStars" class="on" aria-pressed="true">Stars</button>
+      <button type="button" id="quickTrails" class="on" aria-pressed="true">Trails</button>
       <button type="button" id="quickLaunch" hidden>Launch</button>
     </div>
   </div>
@@ -344,7 +370,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.5.2 · Look dock trial · Ghost stick · two-tier UI</div>
+    <div id="ver">v1.6.0 · two-tier Look Fly Motion · stick values</div>
   </div>
 
   <div id="qrModal">
@@ -382,12 +408,12 @@
       if (Number.isFinite(pf)) pondFrac = pf;
     } catch (e) {}
     let pondDragging = false, pondDragId = null;
-    let lookSheet = false;
+    let activeSheet = null;
     let stickState = null;
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.5.2';
+    const APP_VER = '1.6.0';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -540,27 +566,48 @@
       const h = Math.max(56, H - r.top);
       document.documentElement.style.setProperty('--dock-h', h + 'px');
     }
-    function setLookSheet(on) {
-      lookSheet = !!on;
+    function setSheet(name) {
+      if (stickState) {
+        clearTimeout(stickArmTimer);
+        if (stickState.knob) stickState.knob.style.transform = '';
+        stickState.el.classList.remove('armed');
+        if (stickState.armed) fadeStickHud();
+        stickState = null;
+      }
+      activeSheet = name || null;
       const t = $('tier');
-      if (t) t.classList.toggle('open', lookSheet);
-      setOn($('quickLook'), lookSheet);
+      if (t) t.classList.toggle('open', !!activeSheet);
+      document.querySelectorAll('.tier-sheet').forEach(el => {
+        el.classList.toggle('on', el.getAttribute('data-sheet') === activeSheet);
+      });
+      setOn($('quickLook'), activeSheet === 'look');
+      setOn($('quickMotion'), activeSheet === 'motion');
       requestAnimationFrame(measureDock);
     }
     function syncQuick() {
-      const qf = $('quickFly'), qo = $('quickFlow'), ql = $('quickLaunch'), qk = $('quickLook');
+      const qf = $('quickFly'), qo = $('quickFlow'), ql = $('quickLaunch');
       if (qf) qf.classList.toggle('on', !!flyMode);
       if (qo) qo.classList.toggle('on', !!autoFlow);
-      if (qk) qk.classList.toggle('on', !!lookSheet);
       if (ql) {
         ql.hidden = !tiltDiscovered;
         ql.classList.toggle('on', !!launchMode);
       }
       const lb = $('launchMode');
       if (lb) lb.classList.toggle('on', !!launchMode);
+      setOn($('quickLook'), activeSheet === 'look');
+      setOn($('quickMotion'), activeSheet === 'motion');
       setOn($('quickGlow'), glow);
       setOn($('quickStars'), starsOn);
       setOn($('quickTrails'), showTrails);
+      setOn($('quickPond'), pondOn);
+      setOn($('quickEq'), showEq);
+      setOn($('quickDots'), showDots);
+      setOn($('quickFill'), fillOn);
+      setOn($('quickFlyVel'), flyVel);
+      setOn($('quickFlyIn'), flyIn);
+      setOn($('quickFlyMirror'), flyMirror);
+      setOn($('quickOrbit'), autoSpin);
+      setOn($('quickTilt'), tiltOn);
     }
 
     function isOn(el) { return !!(el && el.classList.contains('on')); }
@@ -579,7 +626,10 @@
     }
     $('quickFly').addEventListener('click', e => {
       e.preventDefault(); e.stopPropagation();
-      toggleCheck('flyMode', !isOn($('flyMode')));
+      const next = !isOn($('flyMode'));
+      toggleCheck('flyMode', next);
+      if (next) setSheet('fly');
+      else if (activeSheet === 'fly') setSheet(null);
       hideHint(); keepAwake();
     });
     $('quickFlow').addEventListener('click', e => {
@@ -590,7 +640,14 @@
     if ($('quickLook')) {
       $('quickLook').addEventListener('click', e => {
         e.preventDefault(); e.stopPropagation();
-        setLookSheet(!lookSheet);
+        setSheet(activeSheet === 'look' ? null : 'look');
+        hideHint(); keepAwake();
+      });
+    }
+    if ($('quickMotion')) {
+      $('quickMotion').addEventListener('click', e => {
+        e.preventDefault(); e.stopPropagation();
+        setSheet(activeSheet === 'motion' ? null : 'motion');
         hideHint(); keepAwake();
       });
     }
@@ -605,6 +662,15 @@
     wireQuickToggle('quickGlow', 'glow');
     wireQuickToggle('quickStars', 'starsOn');
     wireQuickToggle('quickTrails', 'showTrails');
+    wireQuickToggle('quickPond', 'pondOn');
+    wireQuickToggle('quickEq', 'showEq');
+    wireQuickToggle('quickDots', 'showDots');
+    wireQuickToggle('quickFill', 'fillOn');
+    wireQuickToggle('quickFlyVel', 'flyVel');
+    wireQuickToggle('quickFlyIn', 'flyIn');
+    wireQuickToggle('quickFlyMirror', 'flyMirror');
+    wireQuickToggle('quickOrbit', 'autoSpin');
+    wireQuickToggle('quickTilt', 'tiltOn');
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./service-worker.js?v=' + APP_VER).catch(() => {});
@@ -706,25 +772,26 @@
     bindRange('drift', 'driftVal', parseFloat, v => v.toFixed(2), v => drift = v);
     bindRange('flowSpd', 'flowSpdVal', parseFloat, v => v.toFixed(2), v => flowSpd = v);
     bindCheck('autoFlow', v => { autoFlow = v; if (v && controlsReady) pickFlowSlider(); syncQuick(); });
-    bindCheck('autoSpin', v => autoSpin = v);
+    bindCheck('autoSpin', v => { autoSpin = v; syncQuick(); });
     bindCheck('flyMode', v => { flyMode = v; if (controlsReady) clearTrails(); syncQuick(); });
-    bindCheck('flyVel', v => { flyVel = v; if (controlsReady) { rebuildFlyTable(); clearTrails(); } });
-    bindCheck('flyIn', v => flyIn = v);
-    bindCheck('flyMirror', v => { flyMirror = v; if (controlsReady) clearTrails(); });
+    bindCheck('flyVel', v => { flyVel = v; if (controlsReady) { rebuildFlyTable(); clearTrails(); } syncQuick(); });
+    bindCheck('flyIn', v => { flyIn = v; syncQuick(); });
+    bindCheck('flyMirror', v => { flyMirror = v; if (controlsReady) clearTrails(); syncQuick(); });
     bindCheck('showTrails', v => { showTrails = v; syncQuick(); });
     bindRange('flyAlt', 'flyAltVal', parseFloat, v => v.toFixed(2), v => flyAlt = v);
     bindCheck('glow', v => { glow = v; syncQuick(); });
     bindCheck('starsOn', v => { starsOn = v; syncQuick(); });
     bindCheck('pondOn', v => {
       pondOn = v;
+      syncQuick();
       if (v) {
         pondFrac = clampPondFrac(pondFrac);
         showToast('Pond — drag the horizon line up/down');
       }
     });
-    bindCheck('showEq', v => showEq = v);
-    bindCheck('showDots', v => showDots = v);
-    bindCheck('fillOn', v => fillOn = v);
+    bindCheck('showEq', v => { showEq = v; syncQuick(); });
+    bindCheck('showDots', v => { showDots = v; syncQuick(); });
+    bindCheck('fillOn', v => { fillOn = v; syncQuick(); });
     bindRange('width', 'widthVal', parseFloat, v => v.toFixed(2), v => lineW = v);
     bindRange('hueSpd', 'hueSpdVal', parseFloat, v => v.toFixed(1), v => hueSpd = v);
     bindRange('ghost', 'ghostVal', parseFloat, v => v.toFixed(2), v => ghost = v);
@@ -1116,7 +1183,7 @@
       }
     }
 
-    bindCheck('tiltOn', v => { void setTiltEnabled(v); });
+    bindCheck('tiltOn', v => { void setTiltEnabled(v).finally(() => syncQuick()); });
     bindCheck('launchMode', v => { void setLaunchEnabled(v); });
     updateLaunchVisibility();
     if ($('quickLaunch')) {
@@ -1192,11 +1259,11 @@
       if (open) {
         const ph = panel.getBoundingClientRect().height || H * 0.45;
         viewLiftPx = Math.min(H * 0.28, Math.max(H * 0.14, ph * 0.45));
-      } else if (lookSheet) {
+      } else if (activeSheet) {
         const th = ($('tier') && $('tier').classList.contains('open')) ? ($('tier').getBoundingClientRect().height || 52) : 0;
         viewLiftPx = Math.min(H * 0.14, Math.max(28, th * 0.55));
       }
-      const target = (open || lookSheet) ? 1 : 0;
+      const target = (open || activeSheet) ? 1 : 0;
       viewLift += (target - viewLift) * Math.min(1, dt * 4.2);
       if (Math.abs(viewLift - target) < 0.001) viewLift = target;
       cy = H / 2 - viewLift * viewLiftPx;
@@ -1351,9 +1418,11 @@
       const dir = dx < 0 ? -1 : 1;
       // Floor so a slight hold-nudge actually crawls, then ramp to max
       const speed = (0.22 + 0.78 * Math.min(1, excess / STICK_TRAVEL)) * STICK_MAX_RATE;
-      let next = def.get() + dir * (def.max - def.min) * speed * dt;
+      const span = def.max - def.min;
+      let next = (stickState.acc != null ? stickState.acc : def.get()) + dir * span * speed * dt;
       next = Math.max(def.min, Math.min(def.max, next));
-      def.set(next);
+      stickState.acc = next;
+      def.set(def.int ? Math.round(next) : next);
       updateStickHud(def);
       positionStickHud(stickState.el);
     }
@@ -1370,7 +1439,7 @@
         e.preventDefault();
         e.stopPropagation();
         clearTimeout(stickArmTimer);
-        stickState = { el, knob, id: e.pointerId, originX: e.clientX, t0: performance.now(), armed: false, dx: 0, def };
+        stickState = { el, knob, id: e.pointerId, originX: e.clientX, t0: performance.now(), armed: false, dx: 0, def, acc: def.get() };
         try { el.setPointerCapture(e.pointerId); } catch (err) {}
         hideHint(); keepAwake();
         stickArmTimer = setTimeout(armStick, STICK_HOLD_MS);
@@ -1405,6 +1474,66 @@
       label: 'Ghost', min: 0, max: 0.92,
       get: () => ghost,
       set: v => { ghost = v; setSliderSilent('ghost', v); },
+      fmt: v => v.toFixed(2)
+    });
+    bindStick('stickWidth', {
+      label: 'Width', min: 0.4, max: 5,
+      get: () => lineW,
+      set: v => { lineW = v; setSliderSilent('width', v); },
+      fmt: v => v.toFixed(2)
+    });
+    bindStick('stickHueSpd', {
+      label: 'Hue spd', min: 0, max: 80,
+      get: () => hueSpd,
+      set: v => { hueSpd = v; setSliderSilent('hueSpd', v); },
+      fmt: v => v.toFixed(1)
+    });
+    bindStick('stickPulse', {
+      label: 'Pulse', min: 0, max: 1,
+      get: () => pulse,
+      set: v => { pulse = v; setSliderSilent('pulse', v); },
+      fmt: v => v.toFixed(2)
+    });
+    bindStick('stickAlt', {
+      label: 'Altitude', min: 0, max: 3.5,
+      get: () => flyAlt,
+      set: v => { flyAlt = v; setSliderSilent('flyAlt', v); },
+      fmt: v => v.toFixed(2)
+    });
+    bindStick('stickCount', {
+      label: 'Circles', min: 1, max: 108, int: true,
+      get: () => N,
+      set: v => { N = Math.round(v); setSliderSilent('count', N); },
+      fmt: v => String(Math.round(v))
+    });
+    bindStick('stickPhase', {
+      label: 'Phase', min: 0, max: 1,
+      get: () => phase,
+      set: v => { phase = v; setSliderSilent('phase', v); },
+      fmt: v => v.toFixed(2)
+    });
+    bindStick('stickRate', {
+      label: 'Rate', min: 0.05, max: 4,
+      get: () => rate,
+      set: v => { rate = v; setSliderSilent('rate', v); },
+      fmt: v => v.toFixed(2) + '×'
+    });
+    bindStick('stickTwist', {
+      label: 'Twist', min: 0, max: 4,
+      get: () => twist,
+      set: v => { twist = v; setSliderSilent('twist', v); },
+      fmt: v => v.toFixed(2)
+    });
+    bindStick('stickDrift', {
+      label: 'Drift', min: 0, max: 2,
+      get: () => drift,
+      set: v => { drift = v; setSliderSilent('drift', v); },
+      fmt: v => v.toFixed(2)
+    });
+    bindStick('stickFlowSpd', {
+      label: 'Flow spd', min: 0.15, max: 2,
+      get: () => flowSpd,
+      set: v => { flowSpd = v; setSliderSilent('flowSpd', v); },
       fmt: v => v.toFixed(2)
     });
     const dockEl = $('dock');
