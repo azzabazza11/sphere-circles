@@ -71,7 +71,7 @@
     }
     #qrInstall[hidden] { display: none !important; }
     #toast {
-      position: fixed; left: 50%; bottom: max(88px, env(safe-area-inset-bottom));
+      position: fixed; left: 50%; bottom: calc(var(--dock-h, 72px) + 16px);
       transform: translateX(-50%);
       z-index: 30; max-width: min(92vw, 340px);
       padding: 12px 16px; border-radius: 12px;
@@ -140,13 +140,26 @@
     }
     #panel .val { color: #44ffaa; font-weight: 600; text-align: right; font-size: 12px; }
 
-    #quick {
-      position: fixed; left: 50%; transform: translateX(-50%);
-      bottom: max(16px, env(safe-area-inset-bottom));
-      z-index: 3; display: flex; gap: 10px;
-      pointer-events: auto;
+    #dock {
+      position: fixed; left: 0; right: 0;
+      bottom: max(12px, env(safe-area-inset-bottom));
+      z-index: 3; display: flex; flex-direction: column; gap: 8px;
+      pointer-events: none;
     }
-    #quick button {
+    #quick, #tier {
+      display: flex; flex-wrap: nowrap; align-items: center; gap: 10px;
+      overflow-x: auto; overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-x;
+      padding: 2px 16px;
+      pointer-events: auto;
+      scrollbar-width: none;
+    }
+    #quick::-webkit-scrollbar, #tier::-webkit-scrollbar { display: none; }
+    #tier { display: none; }
+    #tier.open { display: flex; }
+    #quick button, #tier > button {
+      flex: 0 0 auto;
       min-width: 88px; padding: 12px 18px; border-radius: 999px;
       border: 1px solid rgba(255,255,255,0.18);
       background: rgba(8,10,18,0.78); color: #c8d0dc;
@@ -154,11 +167,49 @@
       backdrop-filter: blur(8px);
       -webkit-tap-highlight-color: transparent; cursor: pointer;
     }
-    #quick button.on {
+    #quick button.on, #tier > button.on {
       color: #062218; background: #44ffaa; border-color: #44ffaa;
     }
+    .stick {
+      position: relative;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 44px;
+    }
+    .stick-knob {
+      position: absolute; left: 50%; top: 50%;
+      width: 12px; height: 12px; margin: -6px 0 0 -6px;
+      border-radius: 50%;
+      background: rgba(68,255,170,0.85);
+      border: 1px solid rgba(255,255,255,0.35);
+      pointer-events: none;
+      transition: transform .12s ease;
+    }
+    .stick.armed .stick-knob { transition: none; background: #44ffaa; }
+    .stick-label { position: relative; z-index: 1; }
+    #stickHud {
+      position: fixed; z-index: 4; width: 128px;
+      pointer-events: none; opacity: 0;
+      transform: translateX(-50%);
+      transition: opacity .25s ease;
+    }
+    #stickHud.show { opacity: 1; }
+    #stickHud.fade { opacity: 0; transition: opacity .7s ease; }
+    #stickHudLabel {
+      color: #c8ffe8; font: 650 11px system-ui, sans-serif;
+      text-align: center; margin-bottom: 4px;
+      text-shadow: 0 1px 6px #000;
+    }
+    #stickHudTrack {
+      height: 8px; border-radius: 999px;
+      background: rgba(255,255,255,0.16);
+      overflow: hidden;
+    }
+    #stickHudFill {
+      height: 100%; width: 0%; border-radius: 999px;
+      background: #44ffaa;
+    }
     #hint {
-      position: fixed; left: 0; right: 0; bottom: 78px; text-align: center; color: #c8d0dc;
+      position: fixed; left: 0; right: 0; bottom: calc(var(--dock-h, 72px) + 10px); text-align: center; color: #c8d0dc;
       font-family: system-ui, sans-serif; font-size: 13px; text-shadow: 0 1px 8px #000;
       pointer-events: none; opacity: 1; transition: opacity 1.2s ease; padding: 0 20px;
     }
@@ -211,10 +262,26 @@
   <canvas id="c"></canvas>
   <div id="scrim"></div>
   <button id="fab" type="button">Controls</button>
-  <div id="quick">
-    <button type="button" id="quickFly">Fly</button>
-    <button type="button" id="quickFlow" class="on">Flow</button>
-    <button type="button" id="quickLaunch" hidden>Launch</button>
+  <div id="stickHud">
+    <div id="stickHudLabel">Ghost 0.18</div>
+    <div id="stickHudTrack"><div id="stickHudFill"></div></div>
+  </div>
+  <div id="dock">
+    <div id="tier">
+      <button type="button" id="quickGlow" class="on" aria-pressed="true">Glow</button>
+      <button type="button" id="quickStars" class="on" aria-pressed="true">Stars</button>
+      <button type="button" id="quickTrails" class="on" aria-pressed="true">Trails</button>
+      <button type="button" class="stick" id="stickGhost" aria-label="Ghost">
+        <span class="stick-knob" id="stickGhostKnob"></span>
+        <span class="stick-label">Ghost</span>
+      </button>
+    </div>
+    <div id="quick">
+      <button type="button" id="quickFly">Fly</button>
+      <button type="button" id="quickFlow" class="on">Flow</button>
+      <button type="button" id="quickLook">Look</button>
+      <button type="button" id="quickLaunch" hidden>Launch</button>
+    </div>
   </div>
   <div id="panel">
     <div class="acc open" data-acc>
@@ -272,7 +339,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.4.9 · freer pitch · draggable pond · 3D tilt worm · launch snake</div>
+    <div id="ver">v1.5.0 · Look dock trial · Ghost stick · two-tier UI</div>
   </div>
 
   <div id="qrModal">
@@ -310,10 +377,12 @@
       if (Number.isFinite(pf)) pondFrac = pf;
     } catch (e) {}
     let pondDragging = false, pondDragId = null;
+    let lookSheet = false;
+    let stickState = null;
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.4.9';
+    const APP_VER = '1.5.0';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -459,16 +528,34 @@
       });
     });
 
+    function measureDock() {
+      const d = $('dock');
+      if (!d || !H) return;
+      const r = d.getBoundingClientRect();
+      const h = Math.max(56, H - r.top);
+      document.documentElement.style.setProperty('--dock-h', h + 'px');
+    }
+    function setLookSheet(on) {
+      lookSheet = !!on;
+      const t = $('tier');
+      if (t) t.classList.toggle('open', lookSheet);
+      setOn($('quickLook'), lookSheet);
+      requestAnimationFrame(measureDock);
+    }
     function syncQuick() {
-      const qf = $('quickFly'), qo = $('quickFlow'), ql = $('quickLaunch');
+      const qf = $('quickFly'), qo = $('quickFlow'), ql = $('quickLaunch'), qk = $('quickLook');
       if (qf) qf.classList.toggle('on', !!flyMode);
       if (qo) qo.classList.toggle('on', !!autoFlow);
+      if (qk) qk.classList.toggle('on', !!lookSheet);
       if (ql) {
         ql.hidden = !tiltDiscovered;
         ql.classList.toggle('on', !!launchMode);
       }
       const lb = $('launchMode');
       if (lb) lb.classList.toggle('on', !!launchMode);
+      setOn($('quickGlow'), glow);
+      setOn($('quickStars'), starsOn);
+      setOn($('quickTrails'), showTrails);
     }
 
     function isOn(el) { return !!(el && el.classList.contains('on')); }
@@ -495,6 +582,24 @@
       toggleCheck('autoFlow', !isOn($('autoFlow')));
       hideHint(); keepAwake();
     });
+    if ($('quickLook')) {
+      $('quickLook').addEventListener('click', e => {
+        e.preventDefault(); e.stopPropagation();
+        setLookSheet(!lookSheet);
+        hideHint(); keepAwake();
+      });
+    }
+    function wireQuickToggle(qid, pid) {
+      const q = $(qid); if (!q) return;
+      q.addEventListener('click', e => {
+        e.preventDefault(); e.stopPropagation();
+        toggleCheck(pid, !isOn($(pid)));
+        hideHint(); keepAwake();
+      });
+    }
+    wireQuickToggle('quickGlow', 'glow');
+    wireQuickToggle('quickStars', 'starsOn');
+    wireQuickToggle('quickTrails', 'showTrails');
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./service-worker.js?v=' + APP_VER).catch(() => {});
@@ -601,10 +706,10 @@
     bindCheck('flyVel', v => { flyVel = v; if (controlsReady) { rebuildFlyTable(); clearTrails(); } });
     bindCheck('flyIn', v => flyIn = v);
     bindCheck('flyMirror', v => { flyMirror = v; if (controlsReady) clearTrails(); });
-    bindCheck('showTrails', v => showTrails = v);
+    bindCheck('showTrails', v => { showTrails = v; syncQuick(); });
     bindRange('flyAlt', 'flyAltVal', parseFloat, v => v.toFixed(2), v => flyAlt = v);
-    bindCheck('glow', v => glow = v);
-    bindCheck('starsOn', v => starsOn = v);
+    bindCheck('glow', v => { glow = v; syncQuick(); });
+    bindCheck('starsOn', v => { starsOn = v; syncQuick(); });
     bindCheck('pondOn', v => {
       pondOn = v;
       if (v) {
@@ -1075,15 +1180,18 @@
       canvas.width = Math.floor(W * dpr); canvas.height = Math.floor(H * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       cx = W/2; cy = H/2; scale = Math.min(W, H)/3.6;
+      measureDock();
     }
     function updateViewLift(dt) {
       const open = panel.classList.contains('open');
       if (open) {
         const ph = panel.getBoundingClientRect().height || H * 0.45;
-        // Center the scene in the free band above the sheet
         viewLiftPx = Math.min(H * 0.28, Math.max(H * 0.14, ph * 0.45));
+      } else if (lookSheet) {
+        const th = ($('tier') && $('tier').classList.contains('open')) ? ($('tier').getBoundingClientRect().height || 52) : 0;
+        viewLiftPx = Math.min(H * 0.14, Math.max(28, th * 0.55));
       }
-      const target = open ? 1 : 0;
+      const target = (open || lookSheet) ? 1 : 0;
       viewLift += (target - viewLift) * Math.min(1, dt * 4.2);
       if (Math.abs(viewLift - target) < 0.001) viewLift = target;
       cy = H / 2 - viewLift * viewLiftPx;
@@ -1105,11 +1213,10 @@
       pondDragging = false; pondDragId = null;
     }
     function pondClearancePx() {
-      // Keep horizon a fingertip above the quick buttons
       const fingertip = 14;
-      const q = $('quick');
-      if (q) {
-        const r = q.getBoundingClientRect();
+      const d = $('dock');
+      if (d) {
+        const r = d.getBoundingClientRect();
         if (r.height > 0) return Math.max(64, (H - r.top) + fingertip);
       }
       return 88;
@@ -1140,6 +1247,7 @@
       drag = true; lx = x; ly = y;
     }
     function onMove(x, y, id) {
+      if (stickState) return;
       if (!pointers.has(id)) return;
       pointers.set(id, { x, y });
       if (pointers.size >= 2) {
@@ -1198,6 +1306,97 @@
     function rnd(a,b){ return a+Math.random()*(b-a); }
     function setSliderSilent(id, v) { const el=$(id); if(!el) return; el.value=v; el.dispatchEvent(new Event('input')); }
     function setCheckSilent(id, on) { const el=$(id); if(!el) return; setOn(el, on); el.dispatchEvent(new Event('change')); }
+
+    const STICK_HOLD_MS = 100, STICK_DEAD = 8, STICK_ABORT = 18, STICK_TRAVEL = 60, STICK_MAX_RATE = 0.55;
+    let stickHudTimer = 0;
+    function positionStickHud(el) {
+      const hud = $('stickHud'); if (!hud || !el) return;
+      const r = el.getBoundingClientRect();
+      hud.style.left = (r.left + r.width * 0.5) + 'px';
+      hud.style.bottom = Math.max(8, (H || innerHeight) - r.top + 10) + 'px';
+    }
+    function updateStickHud(def) {
+      const hud = $('stickHud'); if (!hud || !def) return;
+      const v = def.get();
+      const t = (v - def.min) / Math.max(1e-6, def.max - def.min);
+      const lab = $('stickHudLabel'); if (lab) lab.textContent = def.label + ' ' + def.fmt(v);
+      const fill = $('stickHudFill'); if (fill) fill.style.width = (Math.max(0, Math.min(1, t)) * 100) + '%';
+    }
+    function showStickHud(el, def) {
+      const hud = $('stickHud'); if (!hud) return;
+      hud.classList.remove('fade');
+      hud.classList.add('show');
+      positionStickHud(el);
+      updateStickHud(def);
+    }
+    function fadeStickHud() {
+      const hud = $('stickHud'); if (!hud) return;
+      hud.classList.add('fade');
+      hud.classList.remove('show');
+      clearTimeout(stickHudTimer);
+      stickHudTimer = setTimeout(() => { hud.classList.remove('fade'); }, 720);
+    }
+    function tickStick(dt) {
+      if (!stickState || !stickState.armed) return;
+      const dx = stickState.dx, def = stickState.def;
+      const excess = Math.abs(dx) - STICK_DEAD;
+      if (excess <= 0) { updateStickHud(def); return; }
+      const dir = dx < 0 ? -1 : 1;
+      const speed = Math.min(1, excess / STICK_TRAVEL) * STICK_MAX_RATE;
+      let next = def.get() + dir * (def.max - def.min) * speed * dt;
+      next = Math.max(def.min, Math.min(def.max, next));
+      def.set(next);
+      updateStickHud(def);
+      positionStickHud(stickState.el);
+    }
+    function bindStick(elId, def) {
+      const el = $(elId); if (!el) return;
+      const knob = el.querySelector('.stick-knob');
+      el.addEventListener('pointerdown', e => {
+        e.stopPropagation();
+        stickState = { el, knob, id: e.pointerId, originX: e.clientX, t0: performance.now(), armed: false, dx: 0, def };
+        hideHint(); keepAwake();
+      });
+    }
+    function onStickMove(e) {
+      if (!stickState || e.pointerId !== stickState.id) return;
+      const dx = e.clientX - stickState.originX;
+      stickState.dx = dx;
+      const held = performance.now() - stickState.t0;
+      if (!stickState.armed) {
+        if (held < STICK_HOLD_MS && Math.abs(dx) > STICK_ABORT) { stickState = null; return; }
+        if (held >= STICK_HOLD_MS || Math.abs(dx) > STICK_DEAD) {
+          stickState.armed = true;
+          stickState.el.classList.add('armed');
+          try { stickState.el.setPointerCapture(e.pointerId); } catch (err) {}
+          showStickHud(stickState.el, stickState.def);
+        }
+        return;
+      }
+      e.preventDefault();
+      if (stickState.knob) {
+        const nx = Math.max(-22, Math.min(22, dx));
+        stickState.knob.style.transform = 'translateX(' + nx + 'px)';
+      }
+    }
+    function onStickUp(e) {
+      if (!stickState || e.pointerId !== stickState.id) return;
+      if (stickState.knob) stickState.knob.style.transform = '';
+      stickState.el.classList.remove('armed');
+      if (stickState.armed) fadeStickHud();
+      stickState = null;
+    }
+    addEventListener('pointermove', onStickMove, { passive: false });
+    addEventListener('pointerup', onStickUp);
+    addEventListener('pointercancel', onStickUp);
+    bindStick('stickGhost', {
+      label: 'Ghost', min: 0, max: 0.92,
+      get: () => ghost,
+      set: v => { ghost = v; setSliderSilent('ghost', v); },
+      fmt: v => v.toFixed(2)
+    });
+    const dockEl = $('dock');
+    if (dockEl) dockEl.addEventListener('pointerdown', e => e.stopPropagation());
 
     // Auto-flow: 1–3 voices wander different sliders at independent rates / hold times.
     const FLOW_SLIDERS = [
@@ -1357,6 +1556,7 @@
       const dt = Math.min(0.05, (now-lastNow)*0.001); lastNow = now;
       if (!paused) simTime += dt;
       tickFlow(dt);
+      tickStick(dt);
       updateViewLift(dt);
       // smooth settle when toggling fly
       const flyTarget = flyMode ? 1 : 0;
@@ -1372,6 +1572,8 @@
         setOn($('showTrails'), true);
         starsOn = true;
         setOn($('starsOn'), true);
+        setOn($('quickTrails'), true);
+        setOn($('quickStars'), true);
       }
 
       if (ghost > 0.001) { ctx.fillStyle = `rgba(5,5,12,${1-ghost})`; ctx.fillRect(0,0,W,H); }
