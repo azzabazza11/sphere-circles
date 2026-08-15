@@ -415,7 +415,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.6.13 · impact wobble</div>
+    <div id="ver">v1.6.14 · impact orbit</div>
   </div>
 
   <div id="qrModal">
@@ -460,7 +460,7 @@
     let cycleT = 0;
     let flowMuteUI = false;
 
-    const APP_VER = '1.6.13';
+    const APP_VER = '1.6.14';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -1015,6 +1015,7 @@
     let impactLin = [0, 0, 0];
     let impactPos = [0, 0, 0], impactVel = [0, 0, 0];
     let impactSpin = 0, impactSpinVel = 0;
+    let impactOrbit = 0, impactOrbitVel = 0;
     let impactPeak = 0;
     function remapMotion(x, y, z) {
       const ang = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
@@ -1035,9 +1036,9 @@
           impactG = [ag.x, ag.y, ag.z];
           impactGReady = true;
         } else {
-          impactG[0] += (ag.x - impactG[0]) * 0.06;
-          impactG[1] += (ag.y - impactG[1]) * 0.06;
-          impactG[2] += (ag.z - impactG[2]) * 0.06;
+          impactG[0] += (ag.x - impactG[0]) * 0.035;
+          impactG[1] += (ag.y - impactG[1]) * 0.035;
+          impactG[2] += (ag.z - impactG[2]) * 0.035;
         }
         ax = ag.x - impactG[0];
         ay = ag.y - impactG[1];
@@ -1089,6 +1090,8 @@
       }
       impactGReady = false;
       impactPeak = 0;
+      impactOrbit = 0;
+      impactOrbitVel = 0;
       impactOn = true;
       setOn($('impactOn'), true);
       startImpactListen();
@@ -1104,50 +1107,90 @@
     function updateImpact(dt) {
       const lx = impactLin[0], ly = impactLin[1], lz = impactLin[2];
       const mag = Math.hypot(lx, ly, lz);
-      impactPeak *= Math.pow(0.52, dt * 60);
-      if (impactOn && mag > 2.15 && mag > impactPeak * 1.1) {
+      impactPeak *= Math.pow(0.38, dt * 60);
+      if (impactOn && mag > 0.42) {
+        // Gentle continuous push so small motions still lift
+        const push = mag * 0.72 * dt;
+        impactOrbitVel += push;
+        impactVel[0] += lx * 0.055 * dt;
+        impactVel[1] += ly * 0.055 * dt;
+        impactVel[2] += lz * 0.055 * dt;
+        impactSpinVel += lx * 0.12 * dt;
+      }
+      if (impactOn && mag > 0.65 && mag > impactPeak * 1.04) {
         impactPeak = mag;
         const inv = 1 / mag;
-        const kick = 0.11 * (mag - 1.35);
+        const kick = 0.38 * (mag - 0.25);
         const wx = lx * inv * kick, wy = ly * inv * kick, wz = lz * inv * kick;
-        // Device y (along phone) is up; z is out of screen → world z
         impactVel[0] += wx;
         impactVel[1] += wy;
         impactVel[2] += wz;
-        impactSpinVel += wx * 2.4 - wz * 0.8;
+        impactSpinVel += wx * 2.8 - wz * 0.9;
+        impactOrbitVel += 0.95 * (mag - 0.2);
         if (launchMode && snakeReady) {
-          leadVel[0] += wx * 5.5;
-          leadVel[1] += wy * 5.5;
-          leadVel[2] += wz * 5.5;
+          leadVel[0] += wx * 7.2;
+          leadVel[1] += wy * 7.2;
+          leadVel[2] += wz * 7.2;
           leadHeading = norm3([
-            leadHeading[0] + wx * 0.18,
-            leadHeading[1] + wy * 0.18,
-            leadHeading[2] + wz * 0.18
+            leadHeading[0] + wx * 0.22,
+            leadHeading[1] + wy * 0.22,
+            leadHeading[2] + wz * 0.22
           ]);
         }
       }
       if (!impactOn) {
         impactLin[0] = impactLin[1] = impactLin[2] = 0;
       }
-      // Underdamped spring — a jab rings then settles
-      const stiff = 16.5, damp = 4.4;
+      // Wobble spring
+      const stiff = 14, damp = 4.1;
       impactVel[0] += (-stiff * impactPos[0] - damp * impactVel[0]) * dt;
       impactVel[1] += (-stiff * impactPos[1] - damp * impactVel[1]) * dt;
       impactVel[2] += (-stiff * impactPos[2] - damp * impactVel[2]) * dt;
       impactPos[0] += impactVel[0] * dt;
       impactPos[1] += impactVel[1] * dt;
       impactPos[2] += impactVel[2] * dt;
-      impactSpinVel += (-12.5 * impactSpin - 3.8 * impactSpinVel) * dt;
+      impactSpinVel += (-11 * impactSpin - 3.6 * impactSpinVel) * dt;
       impactSpin += impactSpinVel * dt;
-      clampVec(impactPos, 1.65);
-      clampVec(impactVel, 9);
-      impactSpin = clampNum(impactSpin, -0.85, 0.85);
-      impactSpinVel = clampNum(impactSpinVel, -6, 6);
+      // Higher-orbit peel: slower spring so they climb, hang, then settle home
+      const oStiff = 4.6, oDamp = 2.8;
+      impactOrbitVel += (-oStiff * impactOrbit - oDamp * impactOrbitVel) * dt;
+      impactOrbit += impactOrbitVel * dt;
+      if (impactOrbit < 0) {
+        impactOrbit = 0;
+        if (impactOrbitVel < 0) impactOrbitVel *= -0.12;
+      }
+      impactOrbit = Math.min(2.8, impactOrbit);
+      impactOrbitVel = clampNum(impactOrbitVel, -8, 10);
+      clampVec(impactPos, 1.85);
+      clampVec(impactVel, 11);
+      impactSpin = clampNum(impactSpin, -0.95, 0.95);
+      impactSpinVel = clampNum(impactSpinVel, -7, 7);
       if (!impactOn && Math.hypot(impactPos[0], impactPos[1], impactPos[2]) < 1e-4) {
         impactPos[0] = impactPos[1] = impactPos[2] = 0;
         impactVel[0] = impactVel[1] = impactVel[2] = 0;
       }
       if (!impactOn && Math.abs(impactSpin) < 1e-4) { impactSpin = 0; impactSpinVel = 0; }
+      if (!impactOn && impactOrbit < 1e-4 && Math.abs(impactOrbitVel) < 1e-4) {
+        impactOrbit = 0;
+        impactOrbitVel = 0;
+      }
+    }
+    function impactPeel(t, lon, k, alt) {
+      if (alt <= 1e-5) return [0, 0, 0];
+      const st = animState(t);
+      let local = sampleFlyLocal(t);
+      const mirrored = flyMirror && ((k | 0) & 1);
+      if (mirrored) local = [-local[0], -local[1], 0];
+      const bloom = 1 + 0.55 * Math.sin(st.rho);
+      const s = alt * bloom;
+      let lx = local[0] * s;
+      let ly = local[1] * s;
+      const swirl = alt * 0.28 * Math.sin(st.rho) * Math.sin(2 * Math.PI * t + (mirrored ? Math.PI : 0));
+      const xz = Math.hypot(lx, 0.0001);
+      const hx = lx - swirl * (ly * 0.35);
+      const hy = ly + swirl * (xz * 0.55);
+      const hz = swirl * (mirrored ? -1 : 1) * 0.65;
+      return rotateY([hx, hy, hz], lon);
     }
     function impactShift(k, beta) {
       const lag = k * 0.014;
@@ -2146,6 +2189,8 @@
         if (Math.abs(spin) > 1e-4) n = rotY3(n, spin * (0.65 + 0.35 * Math.sin(sp.beta)));
         const jab = impactShift(k, sp.beta);
         center = add(center, jab);
+        const orbit = Math.max(0, impactOrbit + impactOrbitVel * k * 0.02);
+        if (orbit > 1e-4) center = add(center, impactPeel(sp.tk, sp.lon, k, orbit));
         // circlePts expects offset such that surf + offset = center
         const cR = R * Math.cos(rho);
         const off = [center[0] - cR * n[0], center[1] - cR * n[1], center[2] - cR * n[2]];
