@@ -195,7 +195,7 @@
     .stick.armed .stick-knob { transition: none; background: #44ffaa; }
     .stick-label { position: relative; z-index: 1; user-select: none; -webkit-user-select: none; }
     #stickHud {
-      position: fixed; z-index: 4; width: 148px;
+      position: fixed; z-index: 4; width: 222px;
       pointer-events: none; opacity: 0;
       transform: translateX(-50%);
       transition: opacity .25s ease;
@@ -203,12 +203,12 @@
     #stickHud.show { opacity: 1; }
     #stickHud.fade { opacity: 0; transition: opacity .7s ease; }
     #stickHudLabel {
-      color: #c8ffe8; font: 650 11px system-ui, sans-serif;
-      text-align: center; margin-bottom: 4px;
+      color: #c8ffe8; font: 650 17px system-ui, sans-serif;
+      text-align: center; margin-bottom: 6px;
       text-shadow: 0 1px 6px #000;
     }
     #stickHudTrack {
-      height: 8px; border-radius: 999px;
+      height: 12px; border-radius: 999px;
       background: rgba(255,255,255,0.16);
       overflow: hidden;
     }
@@ -370,7 +370,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.6.1 · longer stick hold · two-tier Look Fly Motion</div>
+    <div id="ver">v1.6.2 · larger stick HUD · two-tier Look Fly Motion</div>
   </div>
 
   <div id="qrModal">
@@ -413,7 +413,7 @@
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.6.1';
+    const APP_VER = '1.6.2';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -1385,7 +1385,7 @@
       const hud = $('stickHud'); if (!hud || !el) return;
       const r = el.getBoundingClientRect();
       hud.style.left = (r.left + r.width * 0.5) + 'px';
-      hud.style.bottom = Math.max(8, (H || innerHeight) - r.top + 10) + 'px';
+      hud.style.bottom = Math.max(8, (H || innerHeight) - r.top + 18) + 'px';
     }
     function updateStickHud(def) {
       const hud = $('stickHud'); if (!hud || !def) return;
