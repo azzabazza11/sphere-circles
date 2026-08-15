@@ -180,6 +180,7 @@
     .stick {
       position: relative;
       display: flex; align-items: center; justify-content: center;
+      min-width: 118px;
       min-height: 44px;
       touch-action: pan-x;
     }
@@ -377,7 +378,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.6.3 · lock row while stick HUD · two-tier Look Fly Motion</div>
+    <div id="ver">v1.6.4 · finer stick curve · two-tier Look Fly Motion</div>
   </div>
 
   <div id="qrModal">
@@ -420,7 +421,7 @@
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
 
-    const APP_VER = '1.6.3';
+    const APP_VER = '1.6.4';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -1384,8 +1385,17 @@
     function setSliderSilent(id, v) { const el=$(id); if(!el) return; el.value=v; el.dispatchEvent(new Event('input')); }
     function setCheckSilent(id, on) { const el=$(id); if(!el) return; setOn(el, on); el.dispatchEvent(new Event('change')); }
 
-    const STICK_HOLD_MS = 320, STICK_DEAD = 3, STICK_ABORT = 12, STICK_TRAVEL = 28, STICK_MAX_RATE = 1.2;
+    const STICK_HOLD_MS = 320, STICK_DEAD = 3, STICK_ABORT = 12, STICK_MAX_RATE = 0.85;
     let stickHudTimer = 0, stickArmTimer = 0;
+    function stickThrowPx(el) {
+      const w = el.getBoundingClientRect().width || 118;
+      return Math.max(28, w * 0.5 - 10);
+    }
+    function stickSpeed(u) {
+      // Fine near center, medium mid-throw, fast at the rim (ease-in cubic mix)
+      u = Math.max(0, Math.min(1, u));
+      return 0.04 * u + 0.18 * u * u + 0.78 * u * u * u;
+    }
     function positionStickHud(el) {
       const hud = $('stickHud'); if (!hud || !el) return;
       const r = el.getBoundingClientRect();
@@ -1418,11 +1428,12 @@
       const hud = $('stickHud');
       if (hud) { hud.classList.add('show'); hud.classList.remove('fade'); }
       const dx = stickState.dx, def = stickState.def;
+      const throwPx = stickState.throwPx || 40;
       const excess = Math.abs(dx) - STICK_DEAD;
       if (excess <= 0) { updateStickHud(def); return; }
       const dir = dx < 0 ? -1 : 1;
-      // Floor so a slight hold-nudge actually crawls, then ramp to max
-      const speed = (0.22 + 0.78 * Math.min(1, excess / STICK_TRAVEL)) * STICK_MAX_RATE;
+      const u = Math.min(1, excess / Math.max(8, throwPx - STICK_DEAD));
+      const speed = stickSpeed(u) * STICK_MAX_RATE;
       const span = def.max - def.min;
       let next = (stickState.acc != null ? stickState.acc : def.get()) + dir * span * speed * dt;
       next = Math.max(def.min, Math.min(def.max, next));
@@ -1456,6 +1467,7 @@
       stickState.dx = 0;
       stickState.acc = stickState.def.get();
       stickState.el.classList.add('armed');
+      stickState.throwPx = stickThrowPx(stickState.el);
       lockStickRow(stickState.el);
       try { stickState.el.setPointerCapture(stickState.id); } catch (err) {}
       showStickHud(stickState.el, stickState.def);
@@ -1494,7 +1506,8 @@
       pinStickRow();
       stickState.dx = dx;
       if (stickState.knob) {
-        const nx = Math.max(-22, Math.min(22, dx));
+        const lim = stickState.throwPx || 40;
+        const nx = Math.max(-lim, Math.min(lim, dx));
         stickState.knob.style.transform = 'translateX(' + nx + 'px)';
       }
     }
