@@ -238,7 +238,7 @@
       <button id="shareBtn" type="button" style="flex:1;border:1px solid rgba(127,212,255,0.35);border-radius:10px;padding:12px 8px;background:rgba(127,212,255,0.18);color:#cfefff;font:650 13px system-ui,sans-serif;cursor:pointer">Share QR</button>
       <button id="installBtn" type="button" style="flex:1;border:1px solid rgba(255,204,68,0.4);border-radius:10px;padding:12px 8px;background:rgba(255,204,68,0.18);color:#ffe9a8;font:650 13px system-ui,sans-serif;cursor:pointer">Install</button>
     </div>
-    <p id="hint">Auto flow wanders 1–3 controls on its own (varying rates & holds). Concertina sections · fat sliders.</p>
+    <p id="hint">Auto flow wanders 1–2 controls on its own (varying rates & holds). Concertina sections · fat sliders.</p>
   </div>
   <div id="quick">
     <button type="button" id="quickFly">Fly</button>
@@ -594,8 +594,7 @@
       };
     }
     function refreshFlowScene() {
-      const r = Math.random();
-      flowTargetVoices = r < 0.48 ? 1 : (r < 0.82 ? 2 : 3);
+      flowTargetVoices = Math.random() < 0.55 ? 1 : 2;
       flowSceneHold = rnd(7, 26);
     }
     function pickFlowSlider() {
@@ -634,7 +633,7 @@
           const avoid = new Set(flowVoices.map(v => v.key));
           avoid.delete(voice.key);
           const next = makeFlowVoice(avoid);
-          voice.key = next.key; voice.dir = next.dir; voice.spd = next.spd; voice.hold = next.hold;
+          voice.key = next.key; voice.dir = next.dir; voice.spd = next.spd; voice.hold = next.hold; voice.tog = next.tog;
         }
         if (voice.spd <= 1e-6) continue;
         const s = flowControl(voice.key);
@@ -917,7 +916,7 @@
     if (autoFlow) pickFlowSlider();
     frame(t0);
 
-    const APP_VER = '1.6.9';
+    const APP_VER = '1.6.11';
     function shareUrl() {
       try {
         const u = new URL(location.href);
