@@ -544,13 +544,42 @@
       { key:'fillAmt', min:0, max:0.35, get:()=>fillAmt, set:v=>{ fillAmt=v; setSlider('fillAmt', v, true); } },
       { key:'flyAlt', min:0, max:3.5, get:()=>flyAlt, set:v=>{ flyAlt=v; setSlider('flyAlt', v, true); } }
     ];
+    const FLOW_TOGGLES = [
+      { key:'flyMode', tog:true, get:()=>flyMode, set:v=>setCheck('flyMode', !!v, true) },
+      { key:'flyVel', tog:true, fly:true, get:()=>flyVel, set:v=>setCheck('flyVel', !!v, true) },
+      { key:'flyIn', tog:true, fly:true, get:()=>flyIn, set:v=>setCheck('flyIn', !!v, true) },
+      { key:'flyMirror', tog:true, fly:true, get:()=>flyMirror, set:v=>setCheck('flyMirror', !!v, true) },
+      { key:'showTrails', tog:true, get:()=>showTrails, set:v=>setCheck('showTrails', !!v, true) },
+      { key:'showSphere', tog:true, get:()=>showSphere, set:v=>setCheck('showSphere', !!v, true) },
+      { key:'showEq', tog:true, get:()=>showEq, set:v=>setCheck('showEq', !!v, true) },
+      { key:'showDots', tog:true, get:()=>showDots, set:v=>setCheck('showDots', !!v, true) },
+      { key:'showNrm', tog:true, get:()=>showNrm, set:v=>setCheck('showNrm', !!v, true) },
+      { key:'glow', tog:true, get:()=>glow, set:v=>setCheck('glow', !!v, true) },
+      { key:'fillOn', tog:true, get:()=>fillOn, set:v=>setCheck('fillOn', !!v, true) },
+      { key:'starsOn', tog:true, get:()=>starsOn, set:v=>setCheck('starsOn', !!v, true) },
+      { key:'pondOn', tog:true, get:()=>pondOn, set:v=>setCheck('pondOn', !!v, true) },
+      { key:'autoSpin', tog:true, get:()=>autoSpin, set:v=>setCheck('autoSpin', !!v, true) }
+    ];
+    function flowControl(key) {
+      return FLOW_SLIDERS.find(x => x.key === key) || FLOW_TOGGLES.find(x => x.key === key);
+    }
     let flowVoices = [];
     let flowSceneHold = 0;
     let flowTargetVoices = 1;
 
     function makeFlowVoice(avoidKeys) {
-      const pool = FLOW_SLIDERS.filter(s => !avoidKeys.has(s.key));
-      const s = (pool.length ? pool : FLOW_SLIDERS)[Math.floor(Math.random() * (pool.length || FLOW_SLIDERS.length))];
+      const ok = s => !avoidKeys.has(s.key) && !(s.fly && !flyMode);
+      const sliders = FLOW_SLIDERS.filter(ok);
+      const togs = FLOW_TOGGLES.filter(ok);
+      let pool;
+      if (togs.length && Math.random() < 0.32) pool = togs;
+      else if (sliders.length) pool = sliders;
+      else pool = togs.length ? togs : FLOW_SLIDERS;
+      const s = pool[Math.floor(Math.random() * pool.length)];
+      if (s.tog) {
+        s.set(!s.get());
+        return { key: s.key, dir: 1, spd: 1.2, hold: rnd(1.2, 2.6), tog: true };
+      }
       let spd;
       const roll = Math.random();
       if (roll < 0.08) spd = 0;
@@ -608,8 +637,8 @@
           voice.key = next.key; voice.dir = next.dir; voice.spd = next.spd; voice.hold = next.hold;
         }
         if (voice.spd <= 1e-6) continue;
-        const s = FLOW_SLIDERS.find(x => x.key === voice.key);
-        if (!s) continue;
+        const s = flowControl(voice.key);
+        if (!s || s.tog) continue;
         const span = Math.max(1e-6, s.max - s.min);
         let next = s.get() + voice.dir * span * (0.03 * flowSpd * voice.spd) * dt;
         if (next >= s.max) { next = s.max; voice.dir = -1; }
@@ -888,7 +917,7 @@
     if (autoFlow) pickFlowSlider();
     frame(t0);
 
-    const APP_VER = '1.6.7';
+    const APP_VER = '1.6.8';
     function shareUrl() {
       try {
         const u = new URL(location.href);

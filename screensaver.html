@@ -283,6 +283,7 @@
     #flowHud.fade { opacity: 0; transition: opacity .7s ease; }
     .flowHud-row { width: 222px; opacity: 1; transition: opacity .7s ease; }
     .flowHud-row.fade { opacity: 0; }
+    .flowHud-row.tog .flowHud-track { display: none; }
     .flowHud-lab {
       color: #c8ffe8; font: 650 17px system-ui, sans-serif;
       text-align: center; margin-bottom: 6px;
@@ -402,7 +403,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.6.7 · launch count · smooth rate · no drift</div>
+    <div id="ver">v1.6.8 · flow taps buttons</div>
   </div>
 
   <div id="qrModal">
@@ -445,8 +446,9 @@
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
     let cycleT = 0;
+    let flowMuteUI = false;
 
-    const APP_VER = '1.6.7';
+    const APP_VER = '1.6.8';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -814,7 +816,7 @@
     bindCheck('pondOn', v => {
       pondOn = v;
       syncQuick();
-      if (v) {
+      if (v && !flowMuteUI) {
         pondFrac = clampPondFrac(pondFrac);
         showToast('Pond — drag the horizon line up/down');
       }
@@ -1402,7 +1404,13 @@
     const stars = Array.from({length:220}, () => [(Math.random()-0.5)*48,(Math.random()-0.5)*48,(Math.random()-0.5)*48]);
     function rnd(a,b){ return a+Math.random()*(b-a); }
     function setSliderSilent(id, v) { const el=$(id); if(!el) return; el.value=v; el.dispatchEvent(new Event('input')); }
-    function setCheckSilent(id, on) { const el=$(id); if(!el) return; setOn(el, on); el.dispatchEvent(new Event('change')); }
+    function setCheckSilent(id, on) {
+      const el=$(id); if(!el) return;
+      flowMuteUI = true;
+      setOn(el, on);
+      el.dispatchEvent(new Event('change'));
+      flowMuteUI = false;
+    }
 
     const STICK_HOLD_MS = 320, STICK_DEAD = 3, STICK_ABORT = 12, STICK_MAX_RATE = 0.85;
     let stickHudTimer = 0, stickArmTimer = 0;
@@ -1612,7 +1620,7 @@
       dockEl.addEventListener('selectstart', e => e.preventDefault());
     }
 
-    // Auto-flow: 1–3 voices wander different sliders at independent rates / hold times.
+    // Auto-flow: 1–3 voices wander sliders and tap dock toggles.
     const FLOW_SLIDERS = [
       { key:'N', id:'count', min:1, max:108, int:true, label:'Circles', fmt:v=>String(Math.round(v)), get:()=>N, set:v=>{ N=Math.round(v); setSliderSilent('count', N); } },
       { key:'phase', id:'phase', min:0, max:1, label:'Phase', fmt:v=>v.toFixed(2), get:()=>phase, set:v=>{ phase=v; setSliderSilent('phase', v); } },
@@ -1625,16 +1633,41 @@
       { key:'flyAlt', id:'flyAlt', min:0, max:3.5, label:'Altitude', fmt:v=>v.toFixed(2), get:()=>flyAlt, set:v=>{ flyAlt=v; setSliderSilent('flyAlt', v); } },
       { key:'hue0', id:null, min:0, max:360, label:'Hue', fmt:v=>String(Math.round(((v%360)+360)%360)), get:()=>hue0, set:v=>{ hue0=((v%360)+360)%360; } }
     ];
+    const FLOW_TOGGLES = [
+      { key:'flyMode', tog:true, label:'Fly', fmt:v=>v?'on':'off', get:()=>flyMode, set:v=>setCheckSilent('flyMode', !!v) },
+      { key:'flyVel', tog:true, fly:true, label:'Vel by R', fmt:v=>v?'on':'off', get:()=>flyVel, set:v=>setCheckSilent('flyVel', !!v) },
+      { key:'flyIn', tog:true, fly:true, label:'Inward', fmt:v=>v?'on':'off', get:()=>flyIn, set:v=>setCheckSilent('flyIn', !!v) },
+      { key:'flyMirror', tog:true, fly:true, label:'Mirror', fmt:v=>v?'on':'off', get:()=>flyMirror, set:v=>setCheckSilent('flyMirror', !!v) },
+      { key:'showTrails', tog:true, label:'Trails', fmt:v=>v?'on':'off', get:()=>showTrails, set:v=>setCheckSilent('showTrails', !!v) },
+      { key:'glow', tog:true, label:'Glow', fmt:v=>v?'on':'off', get:()=>glow, set:v=>setCheckSilent('glow', !!v) },
+      { key:'starsOn', tog:true, label:'Stars', fmt:v=>v?'on':'off', get:()=>starsOn, set:v=>setCheckSilent('starsOn', !!v) },
+      { key:'pondOn', tog:true, label:'Pond', fmt:v=>v?'on':'off', get:()=>pondOn, set:v=>setCheckSilent('pondOn', !!v) },
+      { key:'showEq', tog:true, label:'Equator', fmt:v=>v?'on':'off', get:()=>showEq, set:v=>setCheckSilent('showEq', !!v) },
+      { key:'showDots', tog:true, label:'Dots', fmt:v=>v?'on':'off', get:()=>showDots, set:v=>setCheckSilent('showDots', !!v) },
+      { key:'fillOn', tog:true, label:'Fill', fmt:v=>v?'on':'off', get:()=>fillOn, set:v=>setCheckSilent('fillOn', !!v) },
+      { key:'autoSpin', tog:true, label:'Orbit', fmt:v=>v?'on':'off', get:()=>autoSpin, set:v=>setCheckSilent('autoSpin', !!v) }
+    ];
+    function flowControl(key) {
+      return FLOW_SLIDERS.find(x => x.key === key) || FLOW_TOGGLES.find(x => x.key === key);
+    }
     let flowVoices = [];
     let flowSceneHold = 0;
     let flowTargetVoices = 1;
 
     function makeFlowVoice(avoidKeys) {
-      const lock = launchMode ? new Set(['N']) : null;
-      const pool = FLOW_SLIDERS.filter(s => !avoidKeys.has(s.key) && !(lock && lock.has(s.key)));
-      const fallback = FLOW_SLIDERS.filter(s => !(lock && lock.has(s.key)));
-      const pickFrom = pool.length ? pool : (fallback.length ? fallback : FLOW_SLIDERS);
-      const chosen = pickFrom[Math.floor(Math.random() * pickFrom.length)];
+      const lock = launchMode ? new Set(['N', 'showTrails', 'starsOn', 'flyMode']) : null;
+      const ok = s => !avoidKeys.has(s.key) && !(lock && lock.has(s.key)) && !(s.fly && !flyMode);
+      const sliders = FLOW_SLIDERS.filter(ok);
+      const togs = FLOW_TOGGLES.filter(ok);
+      let pool;
+      if (togs.length && Math.random() < 0.32) pool = togs;
+      else if (sliders.length) pool = sliders;
+      else pool = togs.length ? togs : FLOW_SLIDERS;
+      const chosen = pool[Math.floor(Math.random() * pool.length)];
+      if (chosen.tog) {
+        chosen.set(!chosen.get());
+        return { key: chosen.key, dir: 1, spd: 1.2, hold: rnd(1.2, 2.6), tog: true };
+      }
       let spd;
       const roll = Math.random();
       if (roll < 0.08) spd = 0;
@@ -1696,8 +1729,8 @@
           voice.hold = 0;
           continue;
         }
-        const s = FLOW_SLIDERS.find(x => x.key === voice.key);
-        if (!s) continue;
+        const s = flowControl(voice.key);
+        if (!s || s.tog) continue;
         const span = Math.max(1e-6, s.max - s.min);
         let next = s.get() + voice.dir * span * (0.03 * flowSpd * voice.spd) * dt;
         if (next >= s.max) { next = s.max; voice.dir = -1; }
@@ -1720,10 +1753,10 @@
       if (autoFlow && !paused && !stickBusy) {
         for (const voice of flowVoices) {
           if (voice.spd <= 1e-6) continue;
-          const s = FLOW_SLIDERS.find(x => x.key === voice.key);
+          const s = flowControl(voice.key);
           if (!s) continue;
           const v = s.get();
-          const t = (v - s.min) / Math.max(1e-6, s.max - s.min);
+          const t = s.tog ? (v ? 1 : 0) : (v - s.min) / Math.max(1e-6, s.max - s.min);
           const lab = (s.label || s.key) + ' ' + (s.fmt ? s.fmt(v) : v.toFixed(2));
           live.add(s.key);
           let row = flowHudRows.get(s.key);
@@ -1736,6 +1769,7 @@
             flowHudRows.set(s.key, row);
           }
           row.el.classList.remove('fade');
+          row.el.classList.toggle('tog', !!s.tog);
           row.fade = 0;
           row.labEl.textContent = lab;
           row.fillEl.style.width = (Math.max(0, Math.min(1, t)) * 100) + '%';
