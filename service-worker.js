@@ -1,4 +1,4 @@
-const CACHE = 'sphere-circles-v1.6.20';
+const CACHE = 'sphere-circles-v1.6.21';
 const ASSETS = [
   './',
   './index.html',
@@ -6,7 +6,8 @@ const ASSETS = [
   './manifest.webmanifest',
   './icon.svg',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './install.js'
 ];
 
 self.addEventListener('install', event => {
