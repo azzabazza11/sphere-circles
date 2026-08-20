@@ -197,6 +197,10 @@
     #quick button.on, .tier-sheet > button.on {
       color: #062218; background: #44ffaa; border-color: #44ffaa;
     }
+    #quickOrbit.dyn, #autoSpin.dyn {
+      color: #062218; background: #7fd4ff; border-color: #7fd4ff;
+      box-shadow: 0 0 16px rgba(127,212,255,0.35);
+    }
     .stick {
       position: relative;
       display: flex; align-items: center; justify-content: center;
@@ -437,7 +441,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.6.22 · circles toggle</div>
+    <div id="ver">v1.6.23 · orbit dance</div>
   </div>
 
   <div id="qrModal">
@@ -468,7 +472,8 @@
     let snakePos = null, snakeN = null;
     let tiltDiscovered = false;
     try { tiltDiscovered = localStorage.getItem('circles_tilt_discovered') === '1'; } catch (e) {}
-    let showEq = true, showCircles = true, showDots = true, glow = true, fillOn = false, starsOn = true, pondOn = false, autoSpin = true, tiltOn = false, impactOn = false;
+    let showEq = true, showCircles = true, showDots = true, glow = true, fillOn = false, starsOn = true, pondOn = false, autoSpin = true, orbitDyn = false, tiltOn = false, impactOn = false;
+    let orbitRateY = 0.12, orbitRateX = 0, orbitAimY = 0.12, orbitAimX = 0, orbitRetargetIn = 2.5;
     let pondFrac = 0.2; // pond height as fraction of screen (horizon = 1 - pondFrac)
     try {
       const pf = parseFloat(localStorage.getItem('circles_pond_frac'));
@@ -482,7 +487,7 @@
     let cycleT = 0;
     let flowMuteUI = false;
 
-    const APP_VER = '1.6.22';
+    const APP_VER = '1.6.23';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -702,6 +707,8 @@
       setOn($('quickFlyIn'), flyIn);
       setOn($('quickFlyMirror'), flyMirror);
       setOn($('quickOrbit'), autoSpin);
+      if ($('quickOrbit')) $('quickOrbit').classList.toggle('dyn', !!orbitDyn && autoSpin);
+      if ($('autoSpin')) $('autoSpin').classList.toggle('dyn', !!orbitDyn && autoSpin);
       setOn($('quickTilt'), tiltOn);
       setOn($('quickImpact'), impactOn);
     }
@@ -766,9 +773,58 @@
     wireQuickToggle('quickFlyVel', 'flyVel');
     wireQuickToggle('quickFlyIn', 'flyIn');
     wireQuickToggle('quickFlyMirror', 'flyMirror');
-    wireQuickToggle('quickOrbit', 'autoSpin');
     wireQuickToggle('quickTilt', 'tiltOn');
     wireQuickToggle('quickImpact', 'impactOn');
+    (function wireOrbitPress() {
+      const ORBIT_HOLD_MS = 480;
+      function bindOrbitBtn(el) {
+        if (!el) return;
+        let holdTimer = 0, held = false, pid = null;
+        const clear = () => { clearTimeout(holdTimer); holdTimer = 0; };
+        el.addEventListener('pointerdown', e => {
+          if (e.button != null && e.button !== 0) return;
+          e.preventDefault(); e.stopPropagation();
+          held = false; pid = e.pointerId;
+          try { el.setPointerCapture(e.pointerId); } catch (err) {}
+          clear();
+          holdTimer = setTimeout(() => {
+            held = true;
+            if (!autoSpin) {
+              autoSpin = true;
+              setOn($('autoSpin'), true);
+            }
+            orbitDyn = !orbitDyn;
+            if (orbitDyn) {
+              orbitAimY = rnd(0.08, 0.42) * (Math.random() < 0.5 ? -1 : 1);
+              orbitAimX = rnd(0.04, 0.22) * (Math.random() < 0.5 ? -1 : 1);
+              orbitRetargetIn = rnd(1.2, 3.5);
+              if (!flowMuteUI) showToast('Orbit dance — speeds drift on their own');
+            } else if (!flowMuteUI) {
+              showToast('Orbit — simple spin');
+            }
+            syncQuick();
+            hideHint(); keepAwake(); pokeChrome();
+          }, ORBIT_HOLD_MS);
+        });
+        const end = e => {
+          if (pid != null && e.pointerId !== pid) return;
+          clear();
+          try { el.releasePointerCapture(pid); } catch (err) {}
+          pid = null;
+          if (held) { held = false; return; }
+          // tap: toggle simple orbit; dyn clears when turning off
+          const next = !autoSpin;
+          autoSpin = next;
+          if (!next) orbitDyn = false;
+          setOn($('autoSpin'), next);
+          syncQuick();
+          hideHint(); keepAwake(); pokeChrome();
+        };
+        el.addEventListener('pointerup', end);
+        el.addEventListener('pointercancel', () => { clear(); held = false; pid = null; });
+      }
+      bindOrbitBtn($('quickOrbit'));
+    })();
 
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('./service-worker.js?v=' + APP_VER).catch(() => {});
@@ -796,7 +852,11 @@
     bindRange('twist', 'twistVal', parseFloat, v => v.toFixed(2), v => twist = v);
     bindRange('flowSpd', 'flowSpdVal', parseFloat, v => v.toFixed(2), v => flowSpd = v);
     bindCheck('autoFlow', v => { autoFlow = v; if (v && controlsReady) pickFlowSlider(); syncQuick(); });
-    bindCheck('autoSpin', v => { autoSpin = v; syncQuick(); });
+    bindCheck('autoSpin', v => {
+      autoSpin = v;
+      if (!v) orbitDyn = false;
+      syncQuick();
+    });
     bindCheck('flyMode', v => { flyMode = v; if (controlsReady) clearTrails(); syncQuick(); });
     bindCheck('flyVel', v => { flyVel = v; if (controlsReady) { rebuildFlyTable(); clearTrails(); } syncQuick(); });
     bindCheck('flyIn', v => { flyIn = v; syncQuick(); });
@@ -1920,7 +1980,12 @@
       { key:'showCircles', tog:true, label:'Circles', fmt:v=>v?'on':'off', get:()=>showCircles, set:v=>setCheckSilent('showCircles', !!v) },
       { key:'showDots', tog:true, label:'Dots', fmt:v=>v?'on':'off', get:()=>showDots, set:v=>setCheckSilent('showDots', !!v) },
       { key:'fillOn', tog:true, label:'Fill', fmt:v=>v?'on':'off', get:()=>fillOn, set:v=>setCheckSilent('fillOn', !!v) },
-      { key:'autoSpin', tog:true, label:'Orbit', fmt:v=>v?'on':'off', get:()=>autoSpin, set:v=>setCheckSilent('autoSpin', !!v) },
+      { key:'autoSpin', tog:true, label:'Orbit', fmt:v=>v?'on':'off', get:()=>autoSpin, set:v=>{ setCheckSilent('autoSpin', !!v); if (!v) orbitDyn = false; } },
+      { key:'orbitDyn', tog:true, label:'Orbit dance', fmt:v=>v?'on':'off', get:()=>orbitDyn, set:v=>{
+          orbitDyn = !!v;
+          if (orbitDyn && !autoSpin) { autoSpin = true; setCheckSilent('autoSpin', true); }
+          syncQuick();
+        } },
       { key:'launchMode', tog:true, launch:true, label:'Launch', fmt:v=>v?'on':'off', get:()=>launchMode, set:v=>{ void setLaunchEnabled(!!v); } }
     ];
     function flowControl(key) {
@@ -2498,7 +2563,33 @@
       flyBlend += (flyTarget - flyBlend) * Math.min(1, dt * 2.2);
       if (Math.abs(flyBlend - flyTarget) < 0.001) flyBlend = flyTarget;
       const baseT = cycleT / CYCLE;
-      if (autoSpin && !drag && pointers.size < 2 && !tiltOn && !launchMode) rotY += 0.08 * dt;
+      if (autoSpin && !drag && pointers.size < 2 && !tiltOn && !launchMode) {
+        if (orbitDyn) {
+          orbitRetargetIn -= dt;
+          if (orbitRetargetIn <= 0) {
+            orbitRetargetIn = rnd(1.4, 4.8);
+            orbitAimY = rnd(0.06, 0.48) * (Math.random() < 0.55 ? 1 : -1);
+            orbitAimX = rnd(0.02, 0.26) * (Math.random() < 0.5 ? 1 : -1);
+            if (Math.random() < 0.18) orbitAimY *= rnd(1.2, 1.8);
+            if (Math.random() < 0.12) { orbitAimY = 0; orbitAimX = rnd(0.08, 0.22) * (Math.random() < 0.5 ? 1 : -1); }
+          }
+          const k = Math.min(1, dt * 1.15);
+          orbitRateY += (orbitAimY - orbitRateY) * k;
+          orbitRateX += (orbitAimX - orbitRateX) * k;
+          rotY += orbitRateY * dt;
+          rotX = clampNum(rotX + orbitRateX * dt, -1.35, 1.35);
+          // bounce pitch gently so dance keeps tumbling through a full look
+          if (rotX <= -1.34 || rotX >= 1.34) orbitAimX = -Math.sign(rotX || 1) * Math.abs(orbitAimX || 0.1);
+        } else {
+          // Continuous full 360° yaw; soft pitch rock so more of the sphere comes into view
+          orbitRateY += (0.14 - orbitRateY) * Math.min(1, dt * 2.2);
+          orbitRateX += (0 - orbitRateX) * Math.min(1, dt * 2.2);
+          rotY += orbitRateY * dt;
+          const rock = Math.sin(simTime * 0.17) * 0.085;
+          rotX += (rock - rotX) * Math.min(1, dt * 0.55);
+        }
+        if (rotY > Math.PI * 8 || rotY < -Math.PI * 8) rotY = ((rotY % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+      }
       updateTiltView(dt);
       updateImpact(dt);
       updateLaunchPhysics(dt);
