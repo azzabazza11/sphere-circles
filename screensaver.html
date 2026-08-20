@@ -345,6 +345,7 @@
         <button type="button" id="quickTrails" class="on" aria-pressed="true">Trails</button>
         <button type="button" id="quickPond">Pond</button>
         <button type="button" id="quickEq" class="on" aria-pressed="true">Equator</button>
+        <button type="button" id="quickCircles" class="on" aria-pressed="true">Circles</button>
         <button type="button" id="quickDots" class="on" aria-pressed="true">Dots</button>
         <button type="button" id="quickFill">Fill</button>
         <button type="button" class="stick" id="stickWidth" aria-label="Width"><span class="stick-knob"></span><span class="stick-label">Width</span></button>
@@ -418,6 +419,7 @@
           <button type="button" class="tog on" id="showTrails" aria-pressed="true">Trails</button>
           <button type="button" class="tog" id="pondOn" aria-pressed="false">Pond</button>
           <button type="button" class="tog on" id="showEq" aria-pressed="true">Equator</button>
+          <button type="button" class="tog on" id="showCircles" aria-pressed="true">Circles</button>
           <button type="button" class="tog on" id="showDots" aria-pressed="true">Dots</button>
           <button type="button" class="tog" id="fillOn" aria-pressed="false">Fill</button>
         </div>
@@ -435,7 +437,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.6.21 · motion order</div>
+    <div id="ver">v1.6.22 · circles toggle</div>
   </div>
 
   <div id="qrModal">
@@ -466,7 +468,7 @@
     let snakePos = null, snakeN = null;
     let tiltDiscovered = false;
     try { tiltDiscovered = localStorage.getItem('circles_tilt_discovered') === '1'; } catch (e) {}
-    let showEq = true, showDots = true, glow = true, fillOn = false, starsOn = true, pondOn = false, autoSpin = true, tiltOn = false, impactOn = false;
+    let showEq = true, showCircles = true, showDots = true, glow = true, fillOn = false, starsOn = true, pondOn = false, autoSpin = true, tiltOn = false, impactOn = false;
     let pondFrac = 0.2; // pond height as fraction of screen (horizon = 1 - pondFrac)
     try {
       const pf = parseFloat(localStorage.getItem('circles_pond_frac'));
@@ -480,7 +482,7 @@
     let cycleT = 0;
     let flowMuteUI = false;
 
-    const APP_VER = '1.6.21';
+    const APP_VER = '1.6.22';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -693,6 +695,7 @@
       setOn($('quickTrails'), showTrails);
       setOn($('quickPond'), pondOn);
       setOn($('quickEq'), showEq);
+      setOn($('quickCircles'), showCircles);
       setOn($('quickDots'), showDots);
       setOn($('quickFill'), fillOn);
       setOn($('quickFlyVel'), flyVel);
@@ -757,6 +760,7 @@
     wireQuickToggle('quickTrails', 'showTrails');
     wireQuickToggle('quickPond', 'pondOn');
     wireQuickToggle('quickEq', 'showEq');
+    wireQuickToggle('quickCircles', 'showCircles');
     wireQuickToggle('quickDots', 'showDots');
     wireQuickToggle('quickFill', 'fillOn');
     wireQuickToggle('quickFlyVel', 'flyVel');
@@ -810,6 +814,7 @@
       }
     });
     bindCheck('showEq', v => { showEq = v; syncQuick(); });
+    bindCheck('showCircles', v => { showCircles = v; syncQuick(); });
     bindCheck('showDots', v => { showDots = v; syncQuick(); });
     bindCheck('fillOn', v => { fillOn = v; syncQuick(); });
     bindRange('width', 'widthVal', parseFloat, v => v.toFixed(2), v => lineW = v);
@@ -1912,6 +1917,7 @@
       { key:'starsOn', tog:true, label:'Stars', fmt:v=>v?'on':'off', get:()=>starsOn, set:v=>setCheckSilent('starsOn', !!v) },
       { key:'pondOn', tog:true, label:'Pond', fmt:v=>v?'on':'off', get:()=>pondOn, set:v=>setCheckSilent('pondOn', !!v) },
       { key:'showEq', tog:true, label:'Equator', fmt:v=>v?'on':'off', get:()=>showEq, set:v=>setCheckSilent('showEq', !!v) },
+      { key:'showCircles', tog:true, label:'Circles', fmt:v=>v?'on':'off', get:()=>showCircles, set:v=>setCheckSilent('showCircles', !!v) },
       { key:'showDots', tog:true, label:'Dots', fmt:v=>v?'on':'off', get:()=>showDots, set:v=>setCheckSilent('showDots', !!v) },
       { key:'fillOn', tog:true, label:'Fill', fmt:v=>v?'on':'off', get:()=>fillOn, set:v=>setCheckSilent('fillOn', !!v) },
       { key:'autoSpin', tog:true, label:'Orbit', fmt:v=>v?'on':'off', get:()=>autoSpin, set:v=>setCheckSilent('autoSpin', !!v) },
@@ -2568,7 +2574,7 @@
           if (tr.length > TRAIL_LEN) tr.shift();
           if (tr.length > 1) strokePts(tr.map(p=>proj(p)), hsla(h,80,60,0.35), 1.1);
         }
-        if (rho > 1e-4) {
+        if (rho > 1e-4 && showCircles) {
           const pts = circlePts(n, rho, off, seg);
           if (fillOn && fillAmt > 0 && N <= 140) fillPts(pts, hsla(h,85,55,fillAmt*pul));
           if (doGlow) {
