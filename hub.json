@@ -1,7 +1,7 @@
 {
   "id": "sphere-circles",
   "title": "Sphere Circles",
-  "version": "1.6.21",
+  "version": "1.6.22",
   "category": "Creative",
   "desc": "Tangential circles orbiting a sphere — full controls on desktop, a touch-friendly phone app you can install.",
   "accent": "#44ffaa",
@@ -14,6 +14,7 @@
   "appUrl": "https://azzabazza11.github.io/sphere-circles/screensaver.html",
   "tags": ["animation", "phone", "pwa"],
   "changelog": [
+    {"version": "1.6.22", "date": "2026-08-20", "notes": "Toggle circle strokes off in Look, leaving dots when Dots is on."},
     {"version": "1.6.21", "date": "2026-08-20", "notes": "Put Circles and Phase first in the Motion dock sheet."},
     {"version": "1.6.20", "date": "2026-08-17", "notes": "Fix PWA install when opened from Aaron's Apps hub."},
     {"version": "1.6.19", "date": "2026-08-15", "notes": "Idle play wall dashes and unwrap tricks so the flock can lunge, peel open, and wind back into a sphere."}
