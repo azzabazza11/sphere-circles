@@ -248,6 +248,29 @@
       height: 100%; width: 0%; border-radius: 999px;
       background: #44ffaa;
     }
+    #inviteStick {
+      position: fixed; z-index: 5;
+      left: 50%; bottom: 28%;
+      transform: translateX(-50%) translateY(18px) scale(0.96);
+      opacity: 0; pointer-events: none;
+      min-width: 132px; min-height: 48px; padding: 14px 22px;
+      border-radius: 999px;
+      border: 1px solid rgba(68,255,170,0.55);
+      background: rgba(8,10,18,0.88); color: #c8ffe8;
+      font: 650 15px system-ui, sans-serif;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 28px rgba(0,0,0,0.45), 0 0 18px rgba(68,255,170,0.18);
+      -webkit-tap-highlight-color: transparent; cursor: pointer;
+      transition: opacity .4s ease, transform .55s cubic-bezier(.22,.82,.28,1);
+    }
+    #inviteStick.show {
+      opacity: 1; pointer-events: auto;
+      transform: translateX(-50%) translateY(0) scale(1);
+    }
+    #inviteStick.armed {
+      border-color: #44ffaa;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.45), 0 0 22px rgba(68,255,170,0.35);
+    }
     #hint {
       position: fixed; left: 0; right: 0; bottom: calc(var(--dock-h, 72px) + 10px); text-align: center; color: #c8d0dc;
       font-family: system-ui, sans-serif; font-size: 13px; text-shadow: 0 1px 8px #000;
@@ -342,6 +365,10 @@
     <div id="stickHudLabel">Ghost 0.18</div>
     <div id="stickHudTrack"><div id="stickHudFill"></div></div>
   </div>
+  <button type="button" class="stick" id="inviteStick" aria-label="Try a stick" hidden>
+    <span class="stick-knob"></span>
+    <span class="stick-label" id="inviteStickLabel">Ghost</span>
+  </button>
   <div id="flowHud"></div>
   <div id="dock">
     <div id="tier">
@@ -441,7 +468,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.6.23 · orbit dance</div>
+    <div id="ver">v1.6.24 · idle stick invite</div>
   </div>
 
   <div id="qrModal">
@@ -482,18 +509,27 @@
     let pondDragging = false, pondDragId = null;
     let activeSheet = null;
     let stickState = null;
+    let inviteDef = null, inviteShowTimer = 0, inviteHideTimer = 0, inviteUsed = false;
     let lineW = 1.6, hue0 = 0, hueSpd = 8, pulse = 0.25, ghost = 0.18, fillAmt = 0.06;
     let autoFlow = true, flowSpd = 0.5, paused = false, showNrm = false;
     let cycleT = 0;
     let flowMuteUI = false;
 
-    const APP_VER = '1.6.23';
+    const APP_VER = '1.6.24';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
     const scrim = $('scrim');
     const fab = $('fab');
     const hint = $('hint');
+    function showToast(msg) {
+      const el = $('toast');
+      if (!el) return;
+      el.textContent = msg;
+      el.classList.add('show');
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => el.classList.remove('show'), 3200);
+    }
     const R = 1, CYCLE = 6, MAX_N = 108, TRAIL_LEN = 70;
     const trails = Array.from({ length: MAX_N }, () => []);
     function clearTrails() { for (let i = 0; i < MAX_N; i++) trails[i].length = 0; }
@@ -661,6 +697,8 @@
       chromeAway = away;
       document.body.classList.toggle('chrome-away', away);
       measureDock();
+      if (away) scheduleStickInvite();
+      else hideStickInvite(true);
     }
     function pokeChrome() {
       hideHint();
@@ -1823,14 +1861,23 @@
       lockStickRow(stickState.el);
       try { stickState.el.setPointerCapture(stickState.id); } catch (err) {}
       showStickHud(stickState.el, stickState.def);
+      if (stickState.el === $('inviteStick')) {
+        inviteUsed = true;
+        clearTimeout(inviteHideTimer);
+        inviteHideTimer = 0;
+      }
     }
     function abortStick() {
       if (!stickState) return;
+      const wasInvite = stickState.el === $('inviteStick');
+      const wasArmed = !!stickState.armed;
+      const shouldRescheduleInvite = wasInvite && wasArmed && inviteUsed;
       clearTimeout(stickArmTimer);
       unlockStickRow();
       stickState.el.classList.remove('armed');
       if (stickState.knob) stickState.knob.style.transform = '';
       stickState = null;
+      if (shouldRescheduleInvite) hideStickInvite(false);
     }
     function bindStick(elId, def) {
       const el = $(elId); if (!el) return;
@@ -1938,18 +1985,143 @@
       set: v => { flowSpd = v; setSliderSilent('flowSpd', v); },
       fmt: v => v.toFixed(2)
     });
+
+    // Idle fullscreen invite: float a random stick so users discover hold-drag.
+    const INVITE_STICK_DEFS = [
+      {
+        label: 'Ghost', min: 0, max: 0.92,
+        get: () => ghost, set: v => { ghost = v; setSliderSilent('ghost', v); },
+        fmt: v => v.toFixed(2)
+      },
+      {
+        label: 'Width', min: 0.4, max: 5,
+        get: () => lineW, set: v => { lineW = v; setSliderSilent('width', v); },
+        fmt: v => v.toFixed(2)
+      },
+      {
+        label: 'Hue spd', min: 0, max: 80,
+        get: () => hueSpd, set: v => { hueSpd = v; setSliderSilent('hueSpd', v); },
+        fmt: v => v.toFixed(1)
+      },
+      {
+        label: 'Pulse', min: 0, max: 1,
+        get: () => pulse, set: v => { pulse = v; setSliderSilent('pulse', v); },
+        fmt: v => v.toFixed(2)
+      },
+      {
+        label: 'Circles', min: 1, max: 108, int: true,
+        get: () => N, set: v => { N = Math.round(v); setSliderSilent('count', N); },
+        fmt: v => String(Math.round(v))
+      },
+      {
+        label: 'Phase', min: 0, max: 1,
+        get: () => phase, set: v => { phase = v; setSliderSilent('phase', v); },
+        fmt: v => v.toFixed(2)
+      },
+      {
+        label: 'Rate', min: 0.05, max: 4,
+        get: () => rate, set: v => { rate = v; setSliderSilent('rate', v); },
+        fmt: v => v.toFixed(2) + '×'
+      },
+      {
+        label: 'Twist', min: 0, max: 4,
+        get: () => twist, set: v => { twist = v; setSliderSilent('twist', v); },
+        fmt: v => v.toFixed(2)
+      }
+    ];
+    inviteDef = null;
+    inviteShowTimer = 0;
+    inviteHideTimer = 0;
+    inviteUsed = false;
+    const inviteProxy = {
+      get label() { return inviteDef ? inviteDef.label : 'Stick'; },
+      get min() { return inviteDef ? inviteDef.min : 0; },
+      get max() { return inviteDef ? inviteDef.max : 1; },
+      get int() { return !!(inviteDef && inviteDef.int); },
+      get: () => inviteDef ? inviteDef.get() : 0,
+      set: v => { if (inviteDef) inviteDef.set(v); },
+      fmt: v => inviteDef ? inviteDef.fmt(v) : String(v)
+    };
+    bindStick('inviteStick', inviteProxy);
+
+    function clearStickInviteTimers() {
+      clearTimeout(inviteShowTimer);
+      clearTimeout(inviteHideTimer);
+      inviteShowTimer = 0;
+      inviteHideTimer = 0;
+    }
+    function placeInviteStick() {
+      const el = $('inviteStick');
+      if (!el) return;
+      const left = 18 + Math.random() * 64;
+      const bottom = 18 + Math.random() * 42;
+      el.style.left = left + '%';
+      el.style.bottom = bottom + '%';
+      el.style.transform = '';
+    }
+    function hideStickInvite(cancelSchedule) {
+      clearStickInviteTimers();
+      const el = $('inviteStick');
+      if (el) {
+        el.classList.remove('show');
+        el.hidden = true;
+        if (stickState && stickState.el === el) {
+          const armed = stickState.armed;
+          clearTimeout(stickArmTimer);
+          unlockStickRow();
+          stickState.el.classList.remove('armed');
+          if (stickState.knob) stickState.knob.style.transform = '';
+          stickState = null;
+          if (armed) fadeStickHud();
+        }
+      }
+      inviteDef = null;
+      inviteUsed = false;
+      if (!cancelSchedule && chromeAway) scheduleStickInvite();
+    }
+    function showStickInvite() {
+      inviteShowTimer = 0;
+      if (!chromeAway || paused || stickState) {
+        scheduleStickInvite();
+        return;
+      }
+      const el = $('inviteStick');
+      const lab = $('inviteStickLabel');
+      if (!el || !INVITE_STICK_DEFS.length) return;
+      inviteDef = INVITE_STICK_DEFS[(Math.random() * INVITE_STICK_DEFS.length) | 0];
+      inviteUsed = false;
+      if (lab) lab.textContent = inviteDef.label;
+      el.setAttribute('aria-label', inviteDef.label);
+      placeInviteStick();
+      el.hidden = false;
+      requestAnimationFrame(() => { if (chromeAway && inviteDef) el.classList.add('show'); });
+      const life = (8 + Math.random() * 4) * 1000;
+      inviteHideTimer = setTimeout(() => hideStickInvite(false), life);
+    }
+    function scheduleStickInvite() {
+      clearTimeout(inviteShowTimer);
+      if (!chromeAway) return;
+      const wait = (60 + Math.random() * 60) * 1000;
+      inviteShowTimer = setTimeout(showStickInvite, wait);
+    }
+
     const dockEl = $('dock');
     if (dockEl) {
       dockEl.addEventListener('pointerdown', e => { e.stopPropagation(); pokeChrome(); });
       dockEl.addEventListener('contextmenu', e => e.preventDefault());
       dockEl.addEventListener('selectstart', e => e.preventDefault());
     }
+    function isInviteStickTarget(t) {
+      return !!(t && t.closest && t.closest('#inviteStick'));
+    }
     document.addEventListener('pointerdown', e => {
       if (e.target === canvas) return;
+      if (isInviteStickTarget(e.target)) return;
       pokeChrome();
     }, true);
     document.addEventListener('pointermove', e => {
       if (e.target === canvas) return;
+      if (isInviteStickTarget(e.target)) return;
       if (e.pointerType === 'mouse' && !e.buttons) return;
       pokeChrome();
     }, true);
