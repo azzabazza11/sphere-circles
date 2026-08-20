@@ -1,7 +1,7 @@
 {
   "id": "sphere-circles",
   "title": "Sphere Circles",
-  "version": "1.6.25",
+  "version": "1.6.26",
   "category": "Creative",
   "desc": "Tangential circles orbiting a sphere — full controls on desktop, a touch-friendly phone app you can install.",
   "accent": "#44ffaa",
@@ -14,10 +14,10 @@
   "appUrl": "https://azzabazza11.github.io/sphere-circles/screensaver.html",
   "tags": ["animation", "phone", "pwa"],
   "changelog": [
+    {"version": "1.6.26", "date": "2026-08-20", "notes": "Listen mode: mic energy pulses, glows, and nudges the flock (no recording)."},
     {"version": "1.6.25", "date": "2026-08-20", "notes": "Save Flow snapshots; with 2+ snaps Auto flow morphs between them instead of sparse random wander."},
     {"version": "1.6.24", "date": "2026-08-20", "notes": "In fullscreen, a floating stick pops up every minute or two so you can try hold-drag."},
     {"version": "1.6.23", "date": "2026-08-20", "notes": "Full 360° Orbit with a soft pitch rock; long-press Orbit for multi-axis dance speeds."},
-    {"version": "1.6.22", "date": "2026-08-20", "notes": "Toggle circle strokes off in Look, leaving dots when Dots is on."},
-    {"version": "1.6.21", "date": "2026-08-20", "notes": "Put Circles and Phase first in the Motion dock sheet."}
+    {"version": "1.6.22", "date": "2026-08-20", "notes": "Toggle circle strokes off in Look, leaving dots when Dots is on."}
   ]
 }
