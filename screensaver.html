@@ -359,11 +359,11 @@
         <button type="button" class="stick" id="stickAlt" aria-label="Altitude"><span class="stick-knob"></span><span class="stick-label">Altitude</span></button>
       </div>
       <div class="tier-sheet" data-sheet="motion">
+        <button type="button" class="stick" id="stickCount" aria-label="Circles"><span class="stick-knob"></span><span class="stick-label">Circles</span></button>
+        <button type="button" class="stick" id="stickPhase" aria-label="Phase"><span class="stick-knob"></span><span class="stick-label">Phase</span></button>
         <button type="button" id="quickOrbit" class="on" aria-pressed="true">Orbit</button>
         <button type="button" id="quickTilt">Tilt</button>
         <button type="button" id="quickImpact">Impact</button>
-        <button type="button" class="stick" id="stickCount" aria-label="Circles"><span class="stick-knob"></span><span class="stick-label">Circles</span></button>
-        <button type="button" class="stick" id="stickPhase" aria-label="Phase"><span class="stick-knob"></span><span class="stick-label">Phase</span></button>
         <button type="button" class="stick" id="stickRate" aria-label="Rate"><span class="stick-knob"></span><span class="stick-label">Rate</span></button>
         <button type="button" class="stick" id="stickTwist" aria-label="Twist"><span class="stick-knob"></span><span class="stick-label">Twist</span></button>
         <button type="button" class="stick" id="stickFlowSpd" aria-label="Flow spd"><span class="stick-knob"></span><span class="stick-label">Flow spd</span></button>
@@ -435,7 +435,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.6.20 · idle tricks</div>
+    <div id="ver">v1.6.21 · motion order</div>
   </div>
 
   <div id="qrModal">
@@ -480,7 +480,7 @@
     let cycleT = 0;
     let flowMuteUI = false;
 
-    const APP_VER = '1.6.20';
+    const APP_VER = '1.6.21';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
