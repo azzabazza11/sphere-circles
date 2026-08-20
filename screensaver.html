@@ -399,6 +399,7 @@
         <button type="button" class="stick" id="stickRate" aria-label="Rate"><span class="stick-knob"></span><span class="stick-label">Rate</span></button>
         <button type="button" class="stick" id="stickTwist" aria-label="Twist"><span class="stick-knob"></span><span class="stick-label">Twist</span></button>
         <button type="button" class="stick" id="stickFlowSpd" aria-label="Flow spd"><span class="stick-knob"></span><span class="stick-label">Flow spd</span></button>
+        <button type="button" id="quickSnap">Snap</button>
       </div>
     </div>
     <div id="quick">
@@ -421,6 +422,8 @@
         <label>Twist <input id="twist" type="range" min="0" max="4" step="0.01" value="0"><span class="val" id="twistVal">0.00</span></label>
         <div class="togs">
           <button type="button" class="tog on" id="autoFlow" aria-pressed="true">Auto flow</button>
+          <button type="button" class="tog" id="flowSnap" aria-pressed="false">Snap</button>
+          <button type="button" class="tog" id="flowSnapClear" aria-pressed="false" hidden>Clear</button>
           <button type="button" class="tog on" id="autoSpin" aria-pressed="true">Orbit</button>
           <button type="button" class="tog" id="tiltOn" aria-pressed="false">Tilt</button>
           <button type="button" class="tog" id="impactOn" aria-pressed="false">Impact</button>
@@ -468,7 +471,7 @@
       <button id="doneBtn" type="button">Done</button>
       <button id="reloadBtn" type="button">Reload</button>
     </div>
-    <div id="ver">v1.6.24 · idle stick invite</div>
+    <div id="ver">v1.6.25 · flow snapshots</div>
   </div>
 
   <div id="qrModal">
@@ -515,7 +518,7 @@
     let cycleT = 0;
     let flowMuteUI = false;
 
-    const APP_VER = '1.6.24';
+    const APP_VER = '1.6.25';
     const canvas = $('c');
     const ctx = canvas.getContext('2d', { alpha: false });
     const panel = $('panel');
@@ -778,6 +781,20 @@
       toggleCheck('autoFlow', !isOn($('autoFlow')));
       hideHint(); keepAwake();
     });
+    function onSnapClick(e) {
+      e.preventDefault(); e.stopPropagation();
+      addFlowSnap();
+      hideHint(); keepAwake(); pokeChrome();
+    }
+    if ($('quickSnap')) $('quickSnap').addEventListener('click', onSnapClick);
+    if ($('flowSnap')) $('flowSnap').addEventListener('click', onSnapClick);
+    if ($('flowSnapClear')) {
+      $('flowSnapClear').addEventListener('click', e => {
+        e.preventDefault(); e.stopPropagation();
+        clearFlowSnaps();
+        hideHint(); keepAwake(); pokeChrome();
+      });
+    }
     if ($('quickLook')) {
       $('quickLook').addEventListener('click', e => {
         e.preventDefault(); e.stopPropagation();
@@ -889,7 +906,15 @@
     bindRange('rate', 'rateVal', parseFloat, v => v.toFixed(2)+'×', v => rate = v);
     bindRange('twist', 'twistVal', parseFloat, v => v.toFixed(2), v => twist = v);
     bindRange('flowSpd', 'flowSpdVal', parseFloat, v => v.toFixed(2), v => flowSpd = v);
-    bindCheck('autoFlow', v => { autoFlow = v; if (v && controlsReady) pickFlowSlider(); syncQuick(); });
+    bindCheck('autoFlow', v => {
+      autoFlow = v;
+      if (v && controlsReady) {
+        if (flowSnaps.length >= 2) beginSnapMorph();
+        else pickFlowSlider();
+      }
+      if (!v) snapMorph = null;
+      syncQuick();
+    });
     bindCheck('autoSpin', v => {
       autoSpin = v;
       if (!v) orbitDyn = false;
@@ -2232,8 +2257,133 @@
         flowVoices.push(v);
       }
     }
+
+    const FLOW_SNAP_KEY = 'circles_flow_snaps';
+    const FLOW_SNAP_MAX = 12;
+    let flowSnaps = [];
+    let snapMorph = null; // { from, to, t, dur, fromIdx, toIdx }
+    try {
+      const raw = JSON.parse(localStorage.getItem(FLOW_SNAP_KEY) || '[]');
+      if (Array.isArray(raw)) flowSnaps = raw.filter(s => s && typeof s === 'object').slice(0, FLOW_SNAP_MAX);
+    } catch (e) { flowSnaps = []; }
+
+    function captureFlowSnap() {
+      const s = {};
+      for (const x of FLOW_SLIDERS) s[x.key] = x.get();
+      for (const x of FLOW_TOGGLES) {
+        if (x.key === 'launchMode') continue;
+        s[x.key] = !!x.get();
+      }
+      return s;
+    }
+    function persistFlowSnaps() {
+      try { localStorage.setItem(FLOW_SNAP_KEY, JSON.stringify(flowSnaps)); } catch (e) {}
+    }
+    function syncSnapUi() {
+      const n = flowSnaps.length;
+      const label = n ? ('Snap · ' + n) : 'Snap';
+      const qs = $('quickSnap'), fs = $('flowSnap'), clr = $('flowSnapClear');
+      if (qs) qs.textContent = label;
+      if (fs) {
+        fs.textContent = label;
+        setOn(fs, n >= 2);
+      }
+      if (clr) clr.hidden = n < 1;
+    }
+    function addFlowSnap() {
+      flowSnaps.push(captureFlowSnap());
+      if (flowSnaps.length > FLOW_SNAP_MAX) flowSnaps.shift();
+      persistFlowSnaps();
+      syncSnapUi();
+      const n = flowSnaps.length;
+      if (n >= 2) {
+        showToast('Snap ' + n + ' — Flow morphs between snaps');
+        if (autoFlow && !snapMorph) beginSnapMorph();
+      } else {
+        showToast('Snap ' + n + ' saved — need 2+ for morph');
+      }
+    }
+    function clearFlowSnaps() {
+      flowSnaps = [];
+      snapMorph = null;
+      persistFlowSnaps();
+      syncSnapUi();
+      showToast('Snaps cleared — random Flow');
+      if (autoFlow) pickFlowSlider();
+    }
+    function beginSnapMorph(fromIdx) {
+      if (flowSnaps.length < 2) { snapMorph = null; return; }
+      let a = fromIdx;
+      if (a == null || a < 0 || a >= flowSnaps.length) {
+        a = snapMorph && snapMorph.toIdx != null ? snapMorph.toIdx : ((Math.random() * flowSnaps.length) | 0);
+      }
+      let b = (Math.random() * flowSnaps.length) | 0;
+      if (flowSnaps.length > 1) {
+        let guard = 0;
+        while (b === a && guard++ < 8) b = (Math.random() * flowSnaps.length) | 0;
+        if (b === a) b = (a + 1) % flowSnaps.length;
+      }
+      snapMorph = {
+        from: Object.assign({}, flowSnaps[a]),
+        to: Object.assign({}, flowSnaps[b]),
+        fromIdx: a,
+        toIdx: b,
+        t: 0,
+        dur: rnd(4.5, 11) / Math.max(0.35, flowSpd)
+      };
+      flowVoices = [
+        { key: 'snap', dir: 1, spd: 1, hold: snapMorph.dur, tog: false, snap: true }
+      ];
+    }
+    function applySnapLerp(a, b, t) {
+      const u = t * t * (3 - 2 * t);
+      for (const x of FLOW_SLIDERS) {
+        if (!(x.key in a) || !(x.key in b)) continue;
+        if (x.fly && !flyMode && x.key === 'flyAlt') continue;
+        let v = a[x.key] + (b[x.key] - a[x.key]) * u;
+        if (x.key === 'hue0') {
+          let d = b[x.key] - a[x.key];
+          if (d > 180) d -= 360;
+          if (d < -180) d += 360;
+          v = a[x.key] + d * u;
+        }
+        if (x.int) v = Math.round(v);
+        x.set(v);
+      }
+      for (const x of FLOW_TOGGLES) {
+        if (x.key === 'launchMode') continue;
+        if (!(x.key in a) || !(x.key in b)) continue;
+        if (x.fly && !((u < 0.5 ? a.flyMode : b.flyMode) || flyMode) && x.key !== 'flyMode') continue;
+        const on = u < 0.5 ? a[x.key] : b[x.key];
+        if (!!x.get() !== !!on) x.set(!!on);
+      }
+    }
+    function tickSnapMorph(dt) {
+      if (flowSnaps.length < 2) {
+        snapMorph = null;
+        return false;
+      }
+      if (!snapMorph) beginSnapMorph();
+      if (!snapMorph) return false;
+      snapMorph.t += dt;
+      const t = Math.min(1, snapMorph.t / Math.max(0.2, snapMorph.dur));
+      applySnapLerp(snapMorph.from, snapMorph.to, t);
+      if (flowVoices[0] && flowVoices[0].snap) {
+        flowVoices[0].hold = Math.max(0, snapMorph.dur - snapMorph.t);
+        flowVoices[0].spd = 0.8 + 0.4 * Math.sin(t * Math.PI);
+      }
+      if (t >= 1) beginSnapMorph(snapMorph.toIdx);
+      return true;
+    }
+
     function tickFlow(dt) {
       if (!autoFlow || paused) { updateFlowHud(dt); return; }
+      if (flowSnaps.length >= 2) {
+        tickSnapMorph(dt);
+        updateFlowHud(dt);
+        return;
+      }
+      snapMorph = null;
       if (!flowVoices.length) pickFlowSlider();
       flowSceneHold -= dt;
       if (flowSceneHold <= 0) {
@@ -2339,16 +2489,24 @@
       const stickBusy = !!(stickState && stickState.armed);
       const canShow = autoFlow && !paused && !stickBusy;
       let any = false;
-      for (let i = 0; i < 2; i++) {
-        const voice = canShow ? flowVoices[i] : null;
-        if (!voice || voice.spd <= 1e-6) { hideFlowSlot(i); continue; }
-        const s = flowControl(voice.key);
-        if (!s) { hideFlowSlot(i); continue; }
-        const v = s.get();
-        const t = s.tog ? (v ? 1 : 0) : (v - s.min) / Math.max(1e-6, s.max - s.min);
-        const lab = (s.label || s.key) + ' ' + (s.fmt ? s.fmt(v) : v.toFixed(2));
-        showFlowSlot(i, s.key, lab, t, !!s.tog);
+      if (canShow && snapMorph && flowSnaps.length >= 2) {
+        const t = Math.min(1, snapMorph.t / Math.max(0.2, snapMorph.dur));
+        const lab = 'Snap ' + (snapMorph.fromIdx + 1) + '→' + (snapMorph.toIdx + 1) + ' ' + Math.round(t * 100) + '%';
+        showFlowSlot(0, 'snapMorph', lab, t, false);
+        hideFlowSlot(1);
         any = true;
+      } else {
+        for (let i = 0; i < 2; i++) {
+          const voice = canShow ? flowVoices[i] : null;
+          if (!voice || voice.spd <= 1e-6 || voice.snap) { hideFlowSlot(i); continue; }
+          const s = flowControl(voice.key);
+          if (!s) { hideFlowSlot(i); continue; }
+          const v = s.get();
+          const t = s.tog ? (v ? 1 : 0) : (v - s.min) / Math.max(1e-6, s.max - s.min);
+          const lab = (s.label || s.key) + ' ' + (s.fmt ? s.fmt(v) : v.toFixed(2));
+          showFlowSlot(i, s.key, lab, t, !!s.tog);
+          any = true;
+        }
       }
       if (stickBusy || !any) {
         hud.classList.remove('show');
@@ -2360,7 +2518,11 @@
     }
     controlsReady = true;
     syncQuick();
-    if (autoFlow) pickFlowSlider();
+    syncSnapUi();
+    if (autoFlow) {
+      if (flowSnaps.length >= 2) beginSnapMorph();
+      else pickFlowSlider();
+    }
 
     function rot(p) {
       let [x,y,z]=p;
